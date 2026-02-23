@@ -278,6 +278,12 @@
       <div class="user-stats-grid" id="userStatsGrid"></div>
     </div>
     <div class="chart-card full-width">
+      <h2>User Growth Over Time</h2>
+      <div class="subtitle">Monthly new trial starts &amp; conversions per powerplug &mdash; helps identify acquisition trends and need for interventions</div>
+      <div class="chart-container" style="height:340px"><canvas id="userGrowthChart"></canvas></div>
+      <div id="userGrowthInsights" style="margin-top:12px"></div>
+    </div>
+    <div class="chart-card full-width">
       <h2>Country Revenue Breakdown</h2>
       <div class="subtitle">Select a country from the dropdown above to see its detailed monthly revenue. Shows all countries ranked when set to "All".</div>
       <div id="countryRevenueTable"></div>
@@ -288,7 +294,7 @@
     <div class="disclaimer-item">Cardio Adaptability and AFib are the same powerplug &mdash; in some countries one is available and in some the other.</div>
     <div class="disclaimer-item">One user may use multiple powerplugs. Total active users is not a simple sum of per-powerplug counts.</div>
     <div class="disclaimer-item">Revenue data is sourced from Metabase (card 9061). Channel breakdown sourced from Snowflake <code>all_purchase</code> table (PURCHASE_CHANNEL column). "In-App" = Product in-app buy buttons, "Organic" = unattributed/direct, "Referrals" = in-app referral program.</div>
-    <div class="disclaimer-item">Retention Rate = Paid Users / Total Users (trial + paid). ARPU = Total Revenue / Paid Users for the selected period.</div>
+    <div class="disclaimer-item">Retention Rate = Paid Users / Total Users (trial + paid) <strong style="color:#7c5cfc">for the selected period</strong>. This is an all-time cumulative rate; monthly retention would require cohort analysis. ARPU = Total Revenue / Paid Users for the selected period.</div>
     <div class="disclaimer-item"><span style="opacity:0.6">\u{1F4A4}</span> in the purchases chart marks weekend days (typically lower volume). Faded bars = weekends.</div>
   </div>
 </div>
@@ -468,7 +474,7 @@ async function init() {
 }
 
 function renderAll() {
-  renderKPIs(); renderAlerts(); renderUserStats(); renderRevenueChart(); renderPPLegend(); renderTrialChart(); renderPurchaseChart(); renderChannelBreakdown(); renderInsights(); renderProjectionTable(); renderCampaignTracker(); renderCountryRevenue();
+  renderKPIs(); renderAlerts(); renderUserStats(); renderRevenueChart(); renderPPLegend(); renderTrialChart(); renderPurchaseChart(); renderChannelBreakdown(); renderInsights(); renderProjectionTable(); renderCampaignTracker(); renderUserGrowth(); renderCountryRevenue();
 }
 
 // ============================================================
@@ -792,6 +798,162 @@ function renderUserStats() {
   }
 
   container.innerHTML = html;
+}
+
+// ============================================================
+// USER GROWTH OVER TIME
+// ============================================================
+function renderUserGrowth() {
+  const canvas = document.getElementById('userGrowthChart');
+  const insightsEl = document.getElementById('userGrowthInsights');
+  if (!canvas) return;
+
+  if (charts.userGrowth) { charts.userGrowth.destroy(); charts.userGrowth = null; }
+
+  const plugs = getPlugs();
+  // Always show all months for trend visibility
+  const allMonths = Object.keys(REVENUE_DATA).sort();
+  if (allMonths.length < 2) {
+    if (insightsEl) insightsEl.innerHTML = '<div style="color:#555;font-size:13px">Need at least 2 months of data for trend analysis.</div>';
+    return;
+  }
+
+  const monthLabels = allMonths.map(mk => {
+    const [y, m] = mk.split('-');
+    return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  });
+
+  const COLORS = {
+    'AFib': { border: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
+    'Cardio': { border: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
+    'CnO Pro': { border: '#a855f7', bg: 'rgba(168,85,247,0.15)' },
+    'Respiratory': { border: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+    'Tesla': { border: '#eab308', bg: 'rgba(234,179,8,0.15)' },
+  };
+
+  // Datasets: for each PP, a line showing monthly new trial starts
+  const datasets = [];
+  const ppTrends = {}; // for insights
+
+  plugs.forEach(p => {
+    const trialValues = allMonths.map(mk => hasRealTrialData(p) ? getMonthlyTrials(p, mk) : getMonthlySubs(p, mk));
+    const convValues = allMonths.map(mk => hasRealTrialData(p) ? getMonthlyConverted(p, mk) : getMonthlyPurchases(p, mk));
+
+    // Trial starts line (solid)
+    datasets.push({
+      label: p + ' New Users',
+      data: trialValues,
+      borderColor: COLORS[p]?.border || '#888',
+      backgroundColor: COLORS[p]?.bg || 'rgba(136,136,136,0.15)',
+      borderWidth: 2.5,
+      pointRadius: 4,
+      pointBackgroundColor: COLORS[p]?.border || '#888',
+      fill: false,
+      tension: 0.3,
+    });
+
+    // Conversions line (dashed)
+    datasets.push({
+      label: p + ' Converted',
+      data: convValues,
+      borderColor: COLORS[p]?.border || '#888',
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderDash: [6, 3],
+      pointRadius: 3,
+      pointStyle: 'triangle',
+      pointBackgroundColor: COLORS[p]?.border || '#888',
+      fill: false,
+      tension: 0.3,
+    });
+
+    // Compute trends
+    const lastTrial = trialValues[trialValues.length - 1];
+    const prevTrial = trialValues.length >= 2 ? trialValues[trialValues.length - 2] : 0;
+    const momChange = prevTrial > 0 ? ((lastTrial - prevTrial) / prevTrial * 100) : 0;
+    const lastConv = convValues[convValues.length - 1];
+    const convRate = lastTrial > 0 ? (lastConv / lastTrial * 100) : 0;
+    ppTrends[p] = { lastTrial, prevTrial, momChange, lastConv, convRate, trialValues, convValues };
+  });
+
+  charts.userGrowth = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels: monthLabels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'top', labels: { color: '#aaa', font: { size: 11 }, boxWidth: 16, padding: 12 } },
+        datalabels: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(10,10,20,0.95)', titleColor: '#fff', bodyColor: '#ccc', borderColor: '#2a2a3e', borderWidth: 1,
+          callbacks: {
+            label: function(ctx) {
+              return ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString();
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#666', font: { size: 11 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#666', font: { size: 11 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v } },
+      }
+    }
+  });
+
+  // Insights below chart
+  if (!insightsEl) return;
+  let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">';
+
+  plugs.forEach(p => {
+    const t = ppTrends[p];
+    if (!t) return;
+    const color = COLORS[p]?.border || '#888';
+    const arrow = t.momChange > 0 ? '↑' : t.momChange < 0 ? '↓' : '→';
+    const changeClass = t.momChange > 5 ? 'up' : t.momChange < -5 ? 'down' : 'neutral';
+    const latestMonth = allMonths[allMonths.length - 1];
+    const [ly, lm] = latestMonth.split('-');
+    const latestLabel = new Date(ly, lm - 1).toLocaleDateString('en-US', { month: 'short' });
+
+    html += `<div style="background:#12121e;border:1px solid #1e1e30;border-radius:8px;padding:12px">`;
+    html += `<div style="font-size:12px;font-weight:600;color:${color};margin-bottom:6px">${displayName(p)}</div>`;
+    html += `<div style="font-size:11px;color:#aaa;line-height:1.7">`;
+    html += `${latestLabel} new users: <span class="val">${t.lastTrial.toLocaleString()}</span><br>`;
+    html += `MoM: <span class="${changeClass}">${arrow} ${Math.abs(t.momChange).toFixed(1)}%</span><br>`;
+    html += `Conv rate: <span class="val">${t.convRate.toFixed(1)}%</span>`;
+
+    // Flag potential concerns
+    if (t.momChange < -15) {
+      html += `<br><span style="color:#ef4444;font-size:10px;font-weight:600">⚠ Significant decline — intervention recommended</span>`;
+    } else if (t.momChange > 30) {
+      html += `<br><span style="color:#22c55e;font-size:10px;font-weight:600">🚀 Strong growth momentum</span>`;
+    }
+    if (t.convRate < 30 && t.lastTrial > 100) {
+      html += `<br><span style="color:#f59e0b;font-size:10px;font-weight:600">⚡ Low conversion — check onboarding</span>`;
+    }
+
+    html += `</div></div>`;
+  });
+  html += '</div>';
+
+  // Overall trend summary
+  const totalByMonth = allMonths.map((mk, i) =>
+    plugs.reduce((s, p) => s + (ppTrends[p]?.trialValues[i] || 0), 0)
+  );
+  const latestTotal = totalByMonth[totalByMonth.length - 1];
+  const prevTotal = totalByMonth.length >= 2 ? totalByMonth[totalByMonth.length - 2] : 0;
+  const overallMom = prevTotal > 0 ? ((latestTotal - prevTotal) / prevTotal * 100) : 0;
+  const overallClass = overallMom > 5 ? 'up' : overallMom < -5 ? 'down' : 'neutral';
+  const overallArrow = overallMom > 0 ? '↑' : overallMom < 0 ? '↓' : '→';
+
+  html += `<div style="margin-top:10px;padding:10px 14px;background:rgba(124,92,252,0.06);border:1px solid rgba(124,92,252,0.2);border-radius:8px;font-size:12px;color:#bbb;line-height:1.7">`;
+  html += `<span style="color:#7c5cfc;font-weight:600">Overall User Acquisition:</span> `;
+  html += `${latestTotal.toLocaleString()} new users this month `;
+  html += `(<span class="${overallClass}">${overallArrow} ${Math.abs(overallMom).toFixed(1)}% MoM</span>). `;
+  html += `Solid lines = new trial starts, dashed lines = conversions to paid.`;
+  html += `</div>`;
+
+  insightsEl.innerHTML = html;
 }
 
 // ============================================================
