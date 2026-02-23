@@ -251,7 +251,7 @@
     </div>
     <div class="chart-card full-width">
       <h2>Channel Breakdown</h2>
-      <div class="subtitle">Revenue by acquisition channel per powerplug (Source: Snowflake all_purchase · PURCHASE_CHANNEL)</div>
+      <div class="subtitle">Revenue by purchase channel per powerplug &mdash; In-App (app, RevenueCat) vs Organic (website, Shopify+Stripe) vs Marketing channels</div>
       <div id="channelBreakdown"></div>
     </div>
     <div class="chart-card" id="insightRevCard">
@@ -294,7 +294,7 @@
     <div class="disclaimer-item">C&amp;O Pro and C&amp;O Plus are separate products available in different countries. Revenue data is currently combined under C&amp;O Pro/Plus.</div>
     <div class="disclaimer-item">Cardio Adaptability and AFib are the same powerplug &mdash; in some countries one is available and in some the other.</div>
     <div class="disclaimer-item">One user may use multiple powerplugs. Total active users is not a simple sum of per-powerplug counts.</div>
-    <div class="disclaimer-item">Revenue data is sourced from Metabase (card 9061). Channel breakdown sourced from Snowflake <code>all_purchase</code> table (PURCHASE_CHANNEL column). "In-App" = Product in-app buy buttons, "Organic" = unattributed/direct, "Referrals" = in-app referral program.</div>
+    <div class="disclaimer-item">Revenue data is sourced from Metabase (card 9061). Channel breakdown sourced from Snowflake <code>all_purchase</code> table (PURCHASE_CHANNEL column). <strong style="color:#7c5cfc">In-App</strong> = app purchase, no marketing touchpoint (RevenueCat). <strong style="color:#22c55e">Organic</strong> = website purchase, no marketing touchpoint (Shopify + Stripe). Other channels = attributed marketing touchpoints.</div>
     <div class="disclaimer-item">Retention Rate = Paid Users / Total Users (trial + paid) <strong style="color:#7c5cfc">for the selected period</strong>. This is an all-time cumulative rate; monthly retention would require cohort analysis. ARPU = Total Revenue / Paid Users for the selected period.</div>
     <div class="disclaimer-item"><span style="opacity:0.6">\u{1F4A4}</span> in the purchases chart marks weekend days (typically lower volume). Faded bars = weekends.</div>
   </div>
@@ -417,8 +417,9 @@ function getMonthlyConverted(plug, mk) { const d = getTrialDataForMonth(plug, mk
 function hasRealTrialData(plug) { return !!TRIAL_DATA[plug]; }
 
 // Channel Breakdown Data (from Snowflake all_purchase table, PURCHASE_CHANNEL column)
-// Grouped into: In-App (Product in-app buy buttons), Organic (others), Influencer Marketing,
-// Performance Marketing, Referrals, and Other Channels (Inside Sales, Reengagement, Social, Blog, Partnerships)
+// In-App = app purchase, no marketing touchpoint (RevenueCat)
+// Organic = website purchase, no marketing touchpoint (Shopify + Stripe)
+// Influencer/Performance Marketing, Referrals, Other Channels = attributed marketing touchpoints
 const CHANNEL_DATA = /*__CHANNEL_DATA__*/{};
 
 // User overlap / deduplicated user data (from Snowflake all_purchase, EMAIL-based dedup)
@@ -1518,6 +1519,15 @@ function renderChannelBreakdown() {
     'Referrals': '#ec4899',
     'Other Channels': '#6b7280'
   };
+  // Display labels with purchase channel context
+  const CHANNEL_LABELS = {
+    'In-App': 'In-App (RevenueCat)',
+    'Organic': 'Organic (Shopify + Stripe)',
+    'Influencer Marketing': 'Influencer Marketing',
+    'Performance Marketing': 'Performance Marketing',
+    'Referrals': 'Referrals',
+    'Other Channels': 'Other Channels'
+  };
   const channelOrder = ['In-App', 'Organic', 'Influencer Marketing', 'Performance Marketing', 'Referrals', 'Other Channels'];
 
   // Aggregate by selected PP(s)
@@ -1540,7 +1550,7 @@ function renderChannelBreakdown() {
   // Legend
   html += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">';
   channelOrder.forEach(ch => {
-    html += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa"><div style="width:12px;height:12px;border-radius:3px;background:${CHANNEL_COLORS[ch]}"></div>${ch}</div>`;
+    html += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa"><div style="width:12px;height:12px;border-radius:3px;background:${CHANNEL_COLORS[ch]}"></div>${CHANNEL_LABELS[ch] || ch}</div>`;
   });
   html += '</div>';
 
@@ -1596,7 +1606,7 @@ function renderChannelBreakdown() {
 
   channelOrder.forEach(ch => {
     html += '<tr style="border-bottom:1px solid #1a1a2e">';
-    html += `<td style="padding:7px 10px;color:#e0e0e0"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${CHANNEL_COLORS[ch]};margin-right:8px;vertical-align:middle"></span>${ch}</td>`;
+    html += `<td style="padding:7px 10px;color:#e0e0e0"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${CHANNEL_COLORS[ch]};margin-right:8px;vertical-align:middle"></span>${CHANNEL_LABELS[ch] || ch}</td>`;
     showPlugs.forEach(p => {
       const rev = CHANNEL_DATA[p]?.[ch]?.revenue || 0;
       html += `<td style="text-align:right;padding:7px 10px;color:${rev > 0 ? '#ccc' : '#444'}">$${(rev/1000).toFixed(1)}K</td>`;
