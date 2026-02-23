@@ -432,7 +432,7 @@ Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Rob
 Chart.defaults.plugins.datalabels = { display: false };
 
 async function init() {
-  document.getElementById('lastUpdated').textContent = 'Feb 23, 2026 at 06:55 PM' || new Date().toLocaleString();
+  document.getElementById('lastUpdated').textContent = 'Feb 23, 2026 at 07:08 PM' || new Date().toLocaleString();
   const sel = document.getElementById('filterMonth');
   const allMonths = [...new Set([...Object.keys(REVENUE_DATA), ...Object.keys(PURCHASE_DATA)])].sort();
   sel.innerHTML = '<option value="all-time">All Time (Monthly)</option>';
@@ -679,24 +679,94 @@ function renderAlerts() {
   const plugs = getPlugs();
   const alerts = [];
 
+  // Helper: get previous month key (e.g., '2026-02' -> '2026-01')
+  function getPrevMonthKey(mk) {
+    const [y, m] = mk.split('-').map(Number);
+    const pm = m === 1 ? 12 : m - 1;
+    const py = m === 1 ? y - 1 : y;
+    return `${py}-${String(pm).padStart(2, '0')}`;
+  }
+
+  // Helper: get revenue for a specific PP on a specific date index in prev month
+  // dateIdx = 0-based day-of-month index, looks up same day-of-month in prev month
+  function getPrevMonthDayRev(p, mk, dayOfMonth) {
+    const prevMk = getPrevMonthKey(mk);
+    const prevData = getRevForMonth(prevMk);
+    if (!prevData || !prevData.dates) return null;
+    // Find the same day-of-month in prev month's dates array
+    const targetDay = String(dayOfMonth).padStart(2, '0');
+    const targetDate = prevMk + '-' + targetDay;
+    const idx = prevData.dates.indexOf(targetDate);
+    if (idx < 0) return null;
+    return (prevData.revenue[p] || [])[idx] ?? null;
+  }
+
+  // Helper: get 3-day avg around same day-of-month in prev month
+  function getPrevMonth3DayAvg(p, mk, dayOfMonth) {
+    const prevMk = getPrevMonthKey(mk);
+    const prevData = getRevForMonth(prevMk);
+    if (!prevData || !prevData.dates) return null;
+    // Find the closest day-of-month in prev month
+    const targetDay = String(dayOfMonth).padStart(2, '0');
+    const targetDate = prevMk + '-' + targetDay;
+    const idx = prevData.dates.indexOf(targetDate);
+    if (idx < 0) return null;
+    const vals = prevData.revenue[p] || [];
+    // 3-day window centered on that day (or shifted if at edge)
+    const start = Math.max(0, idx - 1);
+    const end = Math.min(vals.length - 1, idx + 1);
+    let sum3 = 0, count = 0;
+    for (let i = start; i <= end; i++) { sum3 += vals[i] || 0; count++; }
+    return count > 0 ? sum3 / count : null;
+  }
+
   if (!isAllTime()) {
     const mk = currentMonth;
     const revData = getRevForMonth(mk);
     if (revData && revData.dates.length >= 3) {
       const days = revData.dates.length;
-      // Check for big drops/spikes in last 3 days
+      const lastDate = revData.dates[days - 1];
+      const dayOfMonth = parseInt(lastDate.split('-')[2], 10);
+
+      // Check for big drops/spikes in last day vs 3-day avg
       plugs.forEach(p => {
         const vals = revData.revenue[p] || [];
         if (vals.length < 3) return;
         const last = vals[days-1], prev = vals[days-2], prevPrev = vals[days-3];
         const avg3 = (prev + prevPrev + (vals[days-4]||prev)) / 3;
+
         // Spike: last day > 2x 3-day avg
         if (last > avg3 * 2 && last > 100) {
-          alerts.push({ type: 'up', text: `<span class="val">${displayName(p)}</span> spiked to <span class="up">$${Math.round(last).toLocaleString()}</span> yesterday (${(last/avg3*100-100).toFixed(0)}% above 3-day avg)` });
+          // Check if same day last month also spiked
+          const prevMonthVal = getPrevMonthDayRev(p, mk, dayOfMonth);
+          const prevMonthAvg = getPrevMonth3DayAvg(p, mk, dayOfMonth);
+          let seasonalNote = '';
+          if (prevMonthVal !== null && prevMonthAvg !== null && prevMonthAvg > 0) {
+            const prevRatio = prevMonthVal / prevMonthAvg;
+            if (prevRatio > 1.5) {
+              seasonalNote = ` <span style="color:#888;font-size:11px">(consistent — same day last month was also ${(prevRatio*100-100).toFixed(0)}% above avg)</span>`;
+            }
+          }
+          alerts.push({ type: 'up', text: `<span class="val">${displayName(p)}</span> spiked to <span class="up">$${Math.round(last).toLocaleString()}</span> yesterday (${(last/avg3*100-100).toFixed(0)}% above 3-day avg)${seasonalNote}` });
         }
+
         // Drop: last day < 50% of 3-day avg
         if (last < avg3 * 0.5 && avg3 > 100) {
-          alerts.push({ type: 'down', text: `<span class="val">${displayName(p)}</span> dropped to <span class="down">$${Math.round(last).toLocaleString()}</span> yesterday (${(100-last/avg3*100).toFixed(0)}% below 3-day avg)` });
+          // Check if same day last month also had a dip
+          const prevMonthVal = getPrevMonthDayRev(p, mk, dayOfMonth);
+          const prevMonthAvg = getPrevMonth3DayAvg(p, mk, dayOfMonth);
+          let seasonalNote = '';
+          if (prevMonthVal !== null && prevMonthAvg !== null && prevMonthAvg > 0) {
+            const prevRatio = prevMonthVal / prevMonthAvg;
+            if (prevRatio < 0.7) {
+              // Last month same day was also below avg — likely seasonal
+              seasonalNote = ` <span style="color:#888;font-size:11px">(likely seasonal — same day last month was also ${(100-prevRatio*100).toFixed(0)}% below avg)</span>`;
+            } else {
+              // Last month same day was normal — this drop is unusual
+              seasonalNote = ` <span style="color:#f59e0b;font-size:11px;font-weight:600">(unusual — same day last month was at $${Math.round(prevMonthVal).toLocaleString()}, which was normal)</span>`;
+            }
+          }
+          alerts.push({ type: 'down', text: `<span class="val">${displayName(p)}</span> dropped to <span class="down">$${Math.round(last).toLocaleString()}</span> yesterday (${(100-last/avg3*100).toFixed(0)}% below 3-day avg)${seasonalNote}` });
         }
       });
 
@@ -709,6 +779,28 @@ function renderAlerts() {
         const pace = (projected / target * 100).toFixed(0);
         if (pace < 80) alerts.push({ type: 'down', text: `Revenue on pace for <span class="down">${pace}%</span> of plan target &mdash; $${Math.round(target - projected).toLocaleString()} shortfall projected` });
         else if (pace > 120) alerts.push({ type: 'up', text: `Revenue on pace to <span class="up">exceed target by ${(pace-100)}%</span> ($${projected.toLocaleString()} projected vs $${target.toLocaleString()} target)` });
+      }
+
+      // MoM total revenue comparison at same point in month
+      const prevMk = getPrevMonthKey(mk);
+      const prevRevData = getRevForMonth(prevMk);
+      if (prevRevData && prevRevData.dates.length > 0) {
+        // Sum prev month's revenue up to the same day count
+        const prevDaysToCompare = Math.min(days, prevRevData.dates.length);
+        const prevTotalAtSamePoint = plugs.reduce((s,p) => {
+          const pv = prevRevData.revenue[p] || [];
+          return s + pv.slice(0, prevDaysToCompare).reduce((a,b) => a+b, 0);
+        }, 0);
+        if (prevTotalAtSamePoint > 0) {
+          const momPace = ((totalRev - prevTotalAtSamePoint) / prevTotalAtSamePoint * 100);
+          const prevMonthName = new Date(parseInt(prevMk.split('-')[0]), parseInt(prevMk.split('-')[1]) - 1).toLocaleDateString('en-US', { month: 'short' });
+          if (Math.abs(momPace) > 5) {
+            const type = momPace > 0 ? 'up' : 'down';
+            const cls = momPace > 0 ? 'up' : 'down';
+            const sign = momPace > 0 ? '+' : '';
+            alerts.push({ type, text: `At day ${days}: <span class="${cls}">${sign}${momPace.toFixed(1)}% vs ${prevMonthName}</span> at same point ($${Math.round(totalRev).toLocaleString()} vs $${Math.round(prevTotalAtSamePoint).toLocaleString()})` });
+          }
+        }
       }
 
       // All-time high check for any PP
@@ -753,9 +845,9 @@ function renderAlerts() {
   }
 
   section.style.display = 'block';
-  const icons = { up: '\u{1F525}', down: '\u26A0\uFE0F' };
+  const icons = { up: '\u{1F525}', down: '\u26A0\uFE0F', info: '\u{1F4CA}' };
   content.innerHTML = `<div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:8px">\u{1F514} Alerts & Highlights</div>` +
-    alerts.map(a => `<div class="insight-item" style="padding:3px 0">${icons[a.type]} ${a.text}</div>`).join('');
+    alerts.map(a => `<div class="insight-item" style="padding:3px 0">${icons[a.type] || icons.info} ${a.text}</div>`).join('');
 }
 
 // ============================================================
