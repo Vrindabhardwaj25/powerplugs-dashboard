@@ -29,7 +29,7 @@
   .tab-content.active { display: block; }
 
   /* Dashboard tab */
-  .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; padding: 20px 40px; }
+  .kpi-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; padding: 20px 40px; }
   .kpi-card { background: linear-gradient(135deg, #16162a 0%, #1c1c32 100%); border: 1px solid #2a2a3e; border-radius: 12px; padding: 18px; }
   .kpi-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #888; margin-bottom: 6px; }
   .kpi-card .value { font-size: 24px; font-weight: 700; color: #fff; }
@@ -210,6 +210,9 @@
 <!-- ============ TAB 1: DASHBOARD ============ -->
 <div id="tab-dashboard" class="tab-content active">
   <div class="kpi-strip" id="kpiStrip"></div>
+  <div id="alertsSection" style="padding:0 40px 10px;display:none">
+    <div id="alertsContent" style="background:linear-gradient(135deg,#1a1520 0%,#1c1830 100%);border:1px solid #2a2a3e;border-radius:12px;padding:16px 20px"></div>
+  </div>
   <div class="dashboard">
     <div class="chart-card full-width">
       <h2>Monthly Summary</h2>
@@ -227,21 +230,16 @@
       <div class="chart-container"><canvas id="revenueChart"></canvas></div>
       <div class="pp-legend" id="ppLegend"></div>
     </div>
-    <div class="chart-card">
+    <div class="chart-card full-width">
       <h2>Trial vs Converted Users</h2>
       <div class="subtitle">Real trial &amp; conversion data from RevCat for all powerplugs</div>
       <div class="chart-container"><canvas id="trialChart"></canvas></div>
       <div id="trialConversionCallouts" style="margin-top:12px"></div>
-      <div style="margin-top:10px;padding:10px 14px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.2);border-radius:8px;font-size:12px;color:#bbb;line-height:1.6">
-        <span style="color:#a855f7;font-weight:600">Free Trial Durations:</span>
-        C&amp;O Pro/Plus: <span style="color:#fff;font-weight:600">7-day &amp; 30-day</span> free trials
-        &middot; All other Powerplugs (AFib, Cardio, Respiratory, Tesla): <span style="color:#fff;font-weight:600">3-day &amp; 7-day</span> free trials
+      <div style="margin-top:10px;padding:10px 14px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.2);border-radius:8px;font-size:12px;color:#bbb;line-height:1.7">
+        <span style="color:#a855f7;font-weight:600">Free Trial Durations:</span><br/>
+        <span style="color:#fff">C&amp;O Pro/Plus:</span> <span style="color:#7c5cfc;font-weight:600">7-day</span> free trial (monthly plans) &middot; <span style="color:#7c5cfc;font-weight:600">30-day</span> free trial (yearly plans)<br/>
+        <span style="color:#fff">AFib, Cardio, Respiratory, Tesla:</span> <span style="color:#7c5cfc;font-weight:600">3-day</span> free trial (monthly plans) &middot; <span style="color:#7c5cfc;font-weight:600">7-day</span> free trial (yearly plans)
       </div>
-    </div>
-    <div class="chart-card">
-      <h2>Conversion Rate</h2>
-      <div class="subtitle">Subscription-to-purchase conversion %</div>
-      <div class="chart-container"><canvas id="conversionChart"></canvas></div>
     </div>
     <div class="chart-card full-width">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
@@ -284,6 +282,9 @@
     <div class="disclaimer-item">C&amp;O Pro and C&amp;O Plus are separate products available in different countries. Revenue data is currently combined under C&amp;O Pro/Plus.</div>
     <div class="disclaimer-item">Cardio Adaptability and AFib are the same powerplug &mdash; in some countries one is available and in some the other.</div>
     <div class="disclaimer-item">One user may use multiple powerplugs. Total active users is not a simple sum of per-powerplug counts.</div>
+    <div class="disclaimer-item">Revenue data is sourced from Metabase (card 9061). Purchase channels: <strong style="color:#7c5cfc">RevenueCat ~56%</strong>, <strong style="color:#3b82f6">Shopify ~28%</strong>, <strong style="color:#22c55e">Stripe ~16%</strong> of total powerplug revenue.</div>
+    <div class="disclaimer-item">Retention Rate = Paid Users / Total Users (trial + paid). ARPU = Total Revenue / Paid Users for the selected period.</div>
+    <div class="disclaimer-item"><span style="opacity:0.6">\u{1F4A4}</span> in the purchases chart marks weekend days (typically lower volume). Faded bars = weekends.</div>
   </div>
 </div>
 
@@ -415,7 +416,7 @@ Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Rob
 Chart.defaults.plugins.datalabels = { display: false };
 
 async function init() {
-  document.getElementById('lastUpdated').textContent = 'Feb 23, 2026 at 05:03 PM' || new Date().toLocaleString();
+  document.getElementById('lastUpdated').textContent = 'Feb 23, 2026 at 05:10 PM' || new Date().toLocaleString();
   const sel = document.getElementById('filterMonth');
   const allMonths = [...new Set([...Object.keys(REVENUE_DATA), ...Object.keys(PURCHASE_DATA)])].sort();
   sel.innerHTML = '<option value="all-time">All Time (Monthly)</option>';
@@ -457,7 +458,7 @@ async function init() {
 }
 
 function renderAll() {
-  renderKPIs(); renderUserStats(); renderRevenueChart(); renderPPLegend(); renderTrialChart(); renderConversionChart(); renderPurchaseChart(); renderInsights(); renderProjectionTable(); renderCampaignTracker(); renderCountryRevenue();
+  renderKPIs(); renderAlerts(); renderUserStats(); renderRevenueChart(); renderPPLegend(); renderTrialChart(); renderPurchaseChart(); renderInsights(); renderProjectionTable(); renderCampaignTracker(); renderCountryRevenue();
 }
 
 // ============================================================
@@ -632,14 +633,113 @@ function renderKPIs() {
     targetVal = ct > 0 ? '$' + ct.toLocaleString() : 'Not Set';
   }
 
+  // ARPU = Total Revenue / Total Paid Users (across selected PPs)
+  const totalPaidUsers = plugs.reduce((s,p) => s + (USER_DATA[p]?.paid || 0), 0);
+  const arpu = totalPaidUsers > 0 ? (totalRev / totalPaidUsers).toFixed(2) : '\u2014';
+
+  // Retention proxy: paid users / total users
+  const totalUsers = plugs.reduce((s,p) => s + (USER_DATA[p]?.users || 0), 0);
+  const retentionRate = totalUsers > 0 ? ((totalPaidUsers / totalUsers) * 100).toFixed(1) + '%' : '\u2014';
+
   const kpis = [
     { label: isAllTime() ? 'Total Revenue' : 'Revenue (MTD)', value: '$' + Math.round(totalRev).toLocaleString() },
     { label: 'Projected Monthly', value: projectedRev },
     { label: 'Plan Target', value: targetVal },
     { label: 'Total Purchases', value: totalPurch.toLocaleString() },
-    { label: 'Avg Daily Rev', value: '$' + Math.round(totalRev / (isAllTime() ? Object.values(REVENUE_DATA).reduce((s,d) => s+d.dates.length, 0) : (getRevForMonth(currentMonth)?.dates.length || 1))).toLocaleString() },
+    { label: 'ARPU', value: arpu !== '\u2014' ? '$' + arpu : arpu },
+    { label: 'Retention Rate', value: retentionRate },
   ];
   strip.innerHTML = kpis.map(k => `<div class="kpi-card"><div class="label">${k.label}</div><div class="value">${k.value}</div></div>`).join('');
+}
+
+// ============================================================
+// ALERTS & HIGHLIGHTS
+// ============================================================
+function renderAlerts() {
+  const section = document.getElementById('alertsSection');
+  const content = document.getElementById('alertsContent');
+  if (!section || !content) return;
+
+  const plugs = getPlugs();
+  const alerts = [];
+
+  if (!isAllTime()) {
+    const mk = currentMonth;
+    const revData = getRevForMonth(mk);
+    if (revData && revData.dates.length >= 3) {
+      const days = revData.dates.length;
+      // Check for big drops/spikes in last 3 days
+      plugs.forEach(p => {
+        const vals = revData.revenue[p] || [];
+        if (vals.length < 3) return;
+        const last = vals[days-1], prev = vals[days-2], prevPrev = vals[days-3];
+        const avg3 = (prev + prevPrev + (vals[days-4]||prev)) / 3;
+        // Spike: last day > 2x 3-day avg
+        if (last > avg3 * 2 && last > 100) {
+          alerts.push({ type: 'up', text: `<span class="val">${displayName(p)}</span> spiked to <span class="up">$${Math.round(last).toLocaleString()}</span> yesterday (${(last/avg3*100-100).toFixed(0)}% above 3-day avg)` });
+        }
+        // Drop: last day < 50% of 3-day avg
+        if (last < avg3 * 0.5 && avg3 > 100) {
+          alerts.push({ type: 'down', text: `<span class="val">${displayName(p)}</span> dropped to <span class="down">$${Math.round(last).toLocaleString()}</span> yesterday (${(100-last/avg3*100).toFixed(0)}% below 3-day avg)` });
+        }
+      });
+
+      // Check total revenue pace vs target
+      const totalRev = plugs.reduce((s,p) => s + sum(revData.revenue[p]||[]), 0);
+      const daysInMonth = getMonthDays(mk);
+      const projected = Math.round((totalRev / days) * daysInMonth);
+      const target = getCampaignTarget(mk);
+      if (target > 0) {
+        const pace = (projected / target * 100).toFixed(0);
+        if (pace < 80) alerts.push({ type: 'down', text: `Revenue on pace for <span class="down">${pace}%</span> of plan target &mdash; $${Math.round(target - projected).toLocaleString()} shortfall projected` });
+        else if (pace > 120) alerts.push({ type: 'up', text: `Revenue on pace to <span class="up">exceed target by ${(pace-100)}%</span> ($${projected.toLocaleString()} projected vs $${target.toLocaleString()} target)` });
+      }
+
+      // All-time high check for any PP
+      const allMonths = Object.keys(REVENUE_DATA).sort();
+      plugs.forEach(p => {
+        const currentMtd = sum(revData.revenue[p]||[]);
+        const best = allMonths.filter(m => m !== mk).reduce((max, m) => {
+          const mdata = REVENUE_DATA[m];
+          return mdata ? Math.max(max, sum(mdata.revenue[p]||[])) : max;
+        }, 0);
+        if (currentMtd > best && best > 0 && days >= 15) {
+          alerts.push({ type: 'up', text: `<span class="val">${displayName(p)}</span> already at <span class="up">all-time high</span> ($${Math.round(currentMtd).toLocaleString()}) with ${daysInMonth - days} days remaining` });
+        }
+      });
+    }
+  } else {
+    // All-time view: identify fastest growing PP
+    const allMonths = getMonthKeys();
+    if (allMonths.length >= 2) {
+      const lastMk = allMonths[allMonths.length-1], prevMk = allMonths[allMonths.length-2];
+      let bestGrowth = -Infinity, bestPP = '';
+      plugs.forEach(p => {
+        const cur = getMonthlyRevenue(p, lastMk), prv = getMonthlyRevenue(p, prevMk);
+        const growth = prv > 0 ? ((cur-prv)/prv*100) : 0;
+        if (growth > bestGrowth) { bestGrowth = growth; bestPP = p; }
+      });
+      if (bestGrowth > 10) alerts.push({ type: 'up', text: `Fastest growing: <span class="val">${displayName(bestPP)}</span> <span class="up">+${bestGrowth.toFixed(0)}% MoM</span>` });
+      // Biggest decliner
+      let worstGrowth = Infinity, worstPP = '';
+      plugs.forEach(p => {
+        const cur = getMonthlyRevenue(p, lastMk), prv = getMonthlyRevenue(p, prevMk);
+        const growth = prv > 0 ? ((cur-prv)/prv*100) : 0;
+        if (growth < worstGrowth) { worstGrowth = growth; worstPP = p; }
+      });
+      if (worstGrowth < -10) alerts.push({ type: 'down', text: `Declining: <span class="val">${displayName(worstPP)}</span> <span class="down">${worstGrowth.toFixed(0)}% MoM</span>` });
+    }
+  }
+
+  if (alerts.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  const icons = { up: '\u{1F525}', down: '\u26A0\uFE0F' };
+  content.innerHTML = `<div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:8px">\u{1F514} Alerts & Highlights</div>` +
+    alerts.map(a => `<div class="insight-item" style="padding:3px 0">${icons[a.type]} ${a.text}</div>`).join('');
 }
 
 // ============================================================
@@ -978,27 +1078,6 @@ function renderTrialChart() {
 }
 
 // ============================================================
-// CONVERSION RATE
-// ============================================================
-function renderConversionChart() {
-  if (charts.conversion) charts.conversion.destroy();
-  const ctx = document.getElementById('conversionChart').getContext('2d');
-  const plugs = getPlugs();
-  const months = getMonthKeys();
-
-  const rates = plugs.map(p => {
-    let trial = 0, conv = 0;
-    months.forEach(mk => {
-      trial += hasRealTrialData(p) ? getMonthlyTrials(p,mk) : getMonthlySubs(p,mk);
-      conv += hasRealTrialData(p) ? getMonthlyConverted(p,mk) : getMonthlyPurchases(p,mk);
-    });
-    return trial > 0 ? ((conv / trial) * 100).toFixed(1) : 0;
-  });
-
-  charts.conversion = new Chart(ctx, { type: 'bar', data: { labels: plugs.map(displayName), datasets: [{ label: 'Conversion %', data: rates, backgroundColor: plugs.map(p => (COLORS[p]?.border || '#888') + '66'), borderColor: plugs.map(p => COLORS[p]?.border || '#888'), borderWidth: 1, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.x + '%' } } }, scales: { x: { beginAtZero: true, ticks: { callback: v => v + '%' } } } } });
-}
-
-// ============================================================
 // PURCHASE CHART
 // ============================================================
 function renderPurchaseChart() {
@@ -1019,10 +1098,35 @@ function renderPurchaseChart() {
 
   const pd = getPurchForMonth(currentMonth);
   if (!pd) { charts.purchase = new Chart(ctx, { type: 'bar', data: { labels: [], datasets: [] } }); if (badge) badge.textContent = ''; return; }
-  const datasets = plugs.map(p => ({ label: displayName(p), data: pd.purchases[p]||[], backgroundColor: COLORS[p].border, borderRadius: 3 }));
-  const totalPurch = plugs.reduce((s,p) => s + sum(pd.purchases[p]||[]), 0);
+
+  // Weekend detection for background coloring
+  const isWeekend = pd.dates.map(d => { const dt = new Date(d + 'T00:00:00'); const day = dt.getDay(); return day === 0 || day === 6; });
+
+  const datasets = plugs.map(p => ({
+    label: displayName(p),
+    data: pd.purchases[p]||[],
+    backgroundColor: (pd.purchases[p]||[]).map((_,i) => isWeekend[i] ? COLORS[p].border + '55' : COLORS[p].border),
+    borderColor: (pd.purchases[p]||[]).map((_,i) => isWeekend[i] ? COLORS[p].border + '88' : COLORS[p].border),
+    borderWidth: (pd.purchases[p]||[]).map((_,i) => isWeekend[i] ? 2 : 0),
+    borderDash: [],
+    borderRadius: 3,
+  }));
+
+  // Calculate per-day totals for datalabels on top bar
+  const dailyTotals = pd.dates.map((_,i) => plugs.reduce((s,p) => s + ((pd.purchases[p]||[])[i]||0), 0));
+  const totalPurch = sum(dailyTotals);
   if (badge) badge.textContent = totalPurch.toLocaleString() + ' total purchases';
-  charts.purchase = new Chart(ctx, { type: 'bar', data: { labels: pd.dates.map(d => d.slice(5)), datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 11 } } } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } });
+
+  // Add an invisible dataset on top for total datalabels
+  datasets.push({
+    label: '_total',
+    data: dailyTotals,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    datalabels: { display: true, anchor: 'end', align: 'end', color: '#aaa', font: { size: 10, weight: '600' }, formatter: v => v > 0 ? v : '' },
+  });
+
+  charts.purchase = new Chart(ctx, { type: 'bar', data: { labels: pd.dates.map(d => d.slice(5)), datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 11 }, filter: item => item.text !== '_total' } }, tooltip: { filter: item => item.dataset.label !== '_total' } }, scales: { x: { stacked: true, ticks: { callback: function(val, idx) { return isWeekend[idx] ? pd.dates[idx].slice(5) + ' \u{1F4A4}' : pd.dates[idx].slice(5); } } }, y: { stacked: true, beginAtZero: true } } } });
 }
 
 // ============================================================
