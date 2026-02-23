@@ -231,6 +231,12 @@
       <h2>Trial vs Converted Users</h2>
       <div class="subtitle">Real trial &amp; conversion data from RevCat for all powerplugs</div>
       <div class="chart-container"><canvas id="trialChart"></canvas></div>
+      <div id="trialConversionCallouts" style="margin-top:12px"></div>
+      <div style="margin-top:10px;padding:10px 14px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.2);border-radius:8px;font-size:12px;color:#bbb;line-height:1.6">
+        <span style="color:#a855f7;font-weight:600">Free Trial Durations:</span>
+        C&amp;O Pro/Plus: <span style="color:#fff;font-weight:600">7-day &amp; 30-day</span> free trials
+        &middot; All other Powerplugs (AFib, Cardio, Respiratory, Tesla): <span style="color:#fff;font-weight:600">3-day &amp; 7-day</span> free trials
+      </div>
     </div>
     <div class="chart-card">
       <h2>Conversion Rate</h2>
@@ -238,14 +244,22 @@
       <div class="chart-container"><canvas id="conversionChart"></canvas></div>
     </div>
     <div class="chart-card full-width">
-      <h2>Daily Purchase Volume</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+        <h2>Daily Purchase Volume</h2>
+        <div id="purchaseTotalBadge" style="background:rgba(124,92,252,0.12);border:1px solid rgba(124,92,252,0.3);border-radius:8px;padding:6px 16px;font-size:14px;font-weight:700;color:#7c5cfc"></div>
+      </div>
       <div class="subtitle">Number of powerplug purchases per day</div>
       <div class="chart-container"><canvas id="purchaseChart"></canvas></div>
     </div>
-    <div class="chart-card full-width">
-      <h2>Insights & Trends</h2>
-      <div class="subtitle">Auto-generated analysis based on current data and filters</div>
-      <div class="insights-section" id="insightsSection"></div>
+    <div class="chart-card" id="insightRevCard">
+      <h2>Revenue Insights</h2>
+      <div class="subtitle">Auto-generated from revenue data</div>
+      <div id="insightRevenue"></div>
+    </div>
+    <div class="chart-card" id="insightPPCard">
+      <h2>Powerplug & Purchase Insights</h2>
+      <div class="subtitle">Breakdown, trends &amp; conversions</div>
+      <div id="insightPPPurchase"></div>
     </div>
     <div class="chart-card full-width">
       <div class="campaign-header">
@@ -751,6 +765,22 @@ function renderCountryRevenue() {
   }
 
   html += '</tbody></table>';
+
+  // "Other" countries breakdown bullet
+  const otherData = countryTotals['Other'];
+  if (otherData) {
+    const otherTotal = plugs.reduce((s, p) => s + (otherData[p]||0), 0);
+    const otherPct = overallTotal > 0 ? ((otherTotal / overallTotal) * 100).toFixed(1) : '0.0';
+    // List the top "Other" sub-countries from all non-dashboard countries in data
+    const otherCountries = sortedCountries.filter(c => c === 'Other');
+    // Build a note about what's in Other
+    const otherNames = ['Sweden','Denmark','South Africa','Portugal','Brazil','Hong Kong','Hungary','Colombia','Slovakia','Iceland','Romania','Dominican Republic','Norway','Malaysia','Japan','Puerto Rico','Lithuania','Cyprus','Ukraine','Indonesia','Luxembourg','Qatar','Taiwan','Finland','Israel','Costa Rica','Greece','Bulgaria'];
+    html += `<div style="margin-top:14px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid #1e1e30;border-radius:10px;font-size:12px;color:#888;line-height:1.7">
+      <span style="color:#aaa;font-weight:600">"Other" countries</span> contribute <span style="color:#7c5cfc;font-weight:600">~${otherPct}%</span> of total revenue (<span style="color:#fff;font-weight:600">$${Math.round(otherTotal).toLocaleString()}</span>).
+      Includes: <span style="color:#aaa">${otherNames.join(', ')}</span>, and 90+ more countries with smaller contributions.
+    </div>`;
+  }
+
   container.innerHTML = html;
 }
 
@@ -928,6 +958,23 @@ function renderTrialChart() {
     { label: 'Trial Users', data: trialValues, backgroundColor: 'rgba(124,92,252,0.35)', borderColor: '#7c5cfc', borderWidth: 1, borderRadius: 6, datalabels: DATALABEL_OPTS },
     { label: 'Converted (Paid)', data: convValues, backgroundColor: 'rgba(74,222,128,0.35)', borderColor: '#4ade80', borderWidth: 1, borderRadius: 6, datalabels: {...DATALABEL_OPTS, color: '#4ade80'} },
   ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 11 } } } }, scales: { y: { beginAtZero: true } } } });
+
+  // Render conversion % callouts below chart
+  const calloutEl = document.getElementById('trialConversionCallouts');
+  if (calloutEl) {
+    let html = '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">';
+    plugs.forEach((p, i) => {
+      const rate = trialValues[i] > 0 ? ((convValues[i] / trialValues[i]) * 100).toFixed(1) : '0.0';
+      const color = COLORS[p]?.border || '#888';
+      html += `<div style="background:rgba(255,255,255,0.03);border:1px solid ${color}33;border-radius:8px;padding:8px 14px;text-align:center;min-width:100px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:#888">${displayName(p)}</div>
+        <div style="font-size:18px;font-weight:700;color:${color}">${rate}%</div>
+        <div style="font-size:10px;color:#555">conversion</div>
+      </div>`;
+    });
+    html += '</div>';
+    calloutEl.innerHTML = html;
+  }
 }
 
 // ============================================================
@@ -958,18 +1005,23 @@ function renderPurchaseChart() {
   if (charts.purchase) charts.purchase.destroy();
   const ctx = document.getElementById('purchaseChart').getContext('2d');
   const plugs = getPlugs();
+  const badge = document.getElementById('purchaseTotalBadge');
 
   if (isAllTime()) {
     const months = Object.keys(PURCHASE_DATA).sort();
     const labels = months.map(m => { const d = new Date(m+'-01'); return d.toLocaleString('default',{month:'short',year:'2-digit'}); });
     const datasets = plugs.map(p => ({ label: displayName(p), data: months.map(mk => getMonthlyPurchases(p,mk)), backgroundColor: COLORS[p].border, borderRadius: 3 }));
+    const totalPurch = months.reduce((s,mk) => s + plugs.reduce((ss,p) => ss + getMonthlyPurchases(p,mk), 0), 0);
+    if (badge) badge.textContent = totalPurch.toLocaleString() + ' total purchases';
     charts.purchase = new Chart(ctx, { type: 'bar', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 11 } } } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } });
     return;
   }
 
   const pd = getPurchForMonth(currentMonth);
-  if (!pd) { charts.purchase = new Chart(ctx, { type: 'bar', data: { labels: [], datasets: [] } }); return; }
+  if (!pd) { charts.purchase = new Chart(ctx, { type: 'bar', data: { labels: [], datasets: [] } }); if (badge) badge.textContent = ''; return; }
   const datasets = plugs.map(p => ({ label: displayName(p), data: pd.purchases[p]||[], backgroundColor: COLORS[p].border, borderRadius: 3 }));
+  const totalPurch = plugs.reduce((s,p) => s + sum(pd.purchases[p]||[]), 0);
+  if (badge) badge.textContent = totalPurch.toLocaleString() + ' total purchases';
   charts.purchase = new Chart(ctx, { type: 'bar', data: { labels: pd.dates.map(d => d.slice(5)), datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 11 } } } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } });
 }
 
@@ -994,7 +1046,6 @@ function renderPPLegend() {
 // INSIGHTS & TRENDS
 // ============================================================
 function renderInsights() {
-  const container = document.getElementById('insightsSection');
   const plugs = getPlugs();
   const months = getMonthKeys();
 
@@ -1054,11 +1105,15 @@ function renderInsights() {
       subInsights += `<div class="insight-item">Latest month: <span class="${sPct > 0?'up':'down'}">${sPct > 0?'+':''}${sPct}% vs prior</span></div>`;
     }
 
-    container.innerHTML = `
-      <div class="insight-card"><h3>\u{1F4C8} Revenue MoM</h3>${revInsights}</div>
-      <div class="insight-card"><h3>\u{1F3AF} Powerplug Performance</h3>${ppInsights}</div>
-      <div class="insight-card"><h3>\u{1F6D2} Purchase Trends</h3>${purchInsights}</div>
-      <div class="insight-card"><h3>\u{1F504} Subscription Trends</h3>${subInsights}</div>`;
+    // Split insights into two cards: Revenue | PP+Purchase
+    const revContainer = document.getElementById('insightRevenue');
+    const ppContainer = document.getElementById('insightPPPurchase');
+    if (revContainer) revContainer.innerHTML = `
+      <div class="insight-card" style="border:none;padding:0"><h3>\u{1F4C8} Revenue MoM</h3>${revInsights}</div>
+      <div class="insight-card" style="border:none;padding:8px 0 0"><h3>\u{1F504} Subscription Trends</h3>${subInsights}</div>`;
+    if (ppContainer) ppContainer.innerHTML = `
+      <div class="insight-card" style="border:none;padding:0"><h3>\u{1F3AF} Powerplug Performance</h3>${ppInsights}</div>
+      <div class="insight-card" style="border:none;padding:8px 0 0"><h3>\u{1F6D2} Purchase Trends</h3>${purchInsights}</div>`;
     return;
   }
 
@@ -1066,7 +1121,13 @@ function renderInsights() {
   const mk = currentMonth;
   const revData = getRevForMonth(mk);
   const purchData = getPurchForMonth(mk);
-  if (!revData) { container.innerHTML = '<div class="insight-item">No data available for this month.</div>'; return; }
+  if (!revData) {
+    const rc = document.getElementById('insightRevenue');
+    const pc = document.getElementById('insightPPPurchase');
+    if (rc) rc.innerHTML = '<div class="insight-item">No data available for this month.</div>';
+    if (pc) pc.innerHTML = '';
+    return;
+  }
 
   const daysElapsed = revData.dates.length;
   const daysInMonth = getMonthDays(mk);
@@ -1148,11 +1209,15 @@ function renderInsights() {
     trendHtml += `<div class="insight-item">Momentum: <span class="${trendPct > 5?'up':trendPct < -5?'down':'neutral'}">${trendPct > 5?'Accelerating':trendPct < -5?'Decelerating':'Steady'}</span></div>`;
   }
 
-  container.innerHTML = `
-    <div class="insight-card"><h3>\u{1F4B0} Revenue Snapshot</h3>${revHtml}</div>
-    <div class="insight-card"><h3>\u{1F4CA} Month-over-Month</h3>${momHtml || '<div class="insight-item">No previous month data.</div>'}</div>
-    <div class="insight-card"><h3>\u{1F3AF} Powerplug Breakdown</h3>${ppHtml}</div>
-    <div class="insight-card"><h3>\u{1F4C8} Intra-Month Trend</h3>${trendHtml || '<div class="insight-item">Not enough data yet.</div>'}</div>`;
+  // Split insights into two cards: Revenue+MoM | PP+Trend
+  const revContainer = document.getElementById('insightRevenue');
+  const ppContainer = document.getElementById('insightPPPurchase');
+  if (revContainer) revContainer.innerHTML = `
+    <div class="insight-card" style="border:none;padding:0"><h3>\u{1F4B0} Revenue Snapshot</h3>${revHtml}</div>
+    <div class="insight-card" style="border:none;padding:8px 0 0"><h3>\u{1F4CA} Month-over-Month</h3>${momHtml || '<div class="insight-item">No previous month data.</div>'}</div>`;
+  if (ppContainer) ppContainer.innerHTML = `
+    <div class="insight-card" style="border:none;padding:0"><h3>\u{1F3AF} Powerplug Breakdown</h3>${ppHtml}</div>
+    <div class="insight-card" style="border:none;padding:8px 0 0"><h3>\u{1F4C8} Intra-Month Trend</h3>${trendHtml || '<div class="insight-item">Not enough data yet.</div>'}</div>`;
 }
 
 // ============================================================
