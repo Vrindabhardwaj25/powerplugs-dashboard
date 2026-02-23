@@ -619,6 +619,136 @@ def _hardcoded_channel_data():
 
 
 # ============================================================
+# FETCH USER OVERLAP DATA (Snowflake all_purchase - deduplicated users)
+# ============================================================
+def fetch_user_overlap():
+    """
+    Fetches deduplicated user counts across powerplugs from Snowflake all_purchase table.
+    Uses EMAIL as user identifier to find:
+    - True unique user count (deduplicated)
+    - Per-PP unique user count
+    - Multi-PP overlap breakdown (1 PP, 2 PPs, 3+ PPs)
+    - Top multi-PP combos
+    """
+    print("Fetching user overlap data via Metabase native query...")
+
+    sql = f"""
+    WITH user_plugs AS (
+      SELECT
+        EMAIL,
+        CASE
+          WHEN POWERPLUG_PLAN LIKE 'AFib%' THEN 'AFib'
+          WHEN POWERPLUG_PLAN LIKE 'Cardio%' THEN 'Cardio'
+          WHEN POWERPLUG_PLAN LIKE 'CnO%' THEN 'CnO Pro'
+          WHEN POWERPLUG_PLAN LIKE 'respiratory%' THEN 'Respiratory'
+          WHEN POWERPLUG_PLAN LIKE 'tesla%' THEN 'Tesla'
+        END as PP
+      FROM "all_purchase"
+      WHERE PRODUCT_CATEGORY = 'powerplug'
+        AND TO_DATE(PURCHASE_DATE) >= '{DATA_START_DATE}'
+        AND POWERPLUG_PLAN IS NOT NULL
+    ),
+    per_user AS (
+      SELECT
+        EMAIL,
+        COUNT(DISTINCT PP) as num_pps,
+        LISTAGG(DISTINCT PP, ' + ') WITHIN GROUP (ORDER BY PP) as combo
+      FROM user_plugs
+      WHERE PP IS NOT NULL
+      GROUP BY EMAIL
+    ),
+    overlap_counts AS (
+      SELECT num_pps, COUNT(*) as user_count
+      FROM per_user GROUP BY num_pps
+    ),
+    combo_counts AS (
+      SELECT combo, COUNT(*) as users
+      FROM per_user WHERE num_pps >= 2
+      GROUP BY combo ORDER BY users DESC LIMIT 10
+    ),
+    pp_unique AS (
+      SELECT PP, COUNT(DISTINCT EMAIL) as unique_users
+      FROM user_plugs WHERE PP IS NOT NULL
+      GROUP BY PP
+    ),
+    total_unique AS (
+      SELECT COUNT(DISTINCT EMAIL) as total FROM user_plugs WHERE PP IS NOT NULL
+    )
+    SELECT 'overlap' as qtype, CAST(num_pps AS VARCHAR) as key1, NULL as key2, user_count as val FROM overlap_counts
+    UNION ALL
+    SELECT 'combo' as qtype, combo as key1, NULL as key2, users as val FROM combo_counts
+    UNION ALL
+    SELECT 'pp_unique' as qtype, PP as key1, NULL as key2, unique_users as val FROM pp_unique
+    UNION ALL
+    SELECT 'total' as qtype, 'total_unique_users' as key1, NULL as key2, total as val FROM total_unique
+    """
+
+    query = {
+        'database': TRIAL_DATABASE_ID,
+        'type': 'native',
+        'native': {'query': sql},
+    }
+
+    try:
+        result = mb_post('dataset', query)
+        rows = result.get('data', {}).get('rows', [])
+        print(f"  Got {len(rows)} user overlap rows")
+    except Exception as e:
+        print(f"  WARNING: Failed to fetch user overlap: {e}")
+        return _hardcoded_user_overlap()
+
+    if not rows:
+        print("  WARNING: No user overlap rows, using fallback")
+        return _hardcoded_user_overlap()
+
+    # Parse into structured dict
+    overlap_data = {
+        'total_unique': 0,
+        'per_pp': {},
+        'overlap': {},
+        'top_combos': [],
+    }
+
+    for row in rows:
+        qtype, key1, _, val = row[0], row[1], row[2], int(row[3] or 0)
+        if qtype == 'total':
+            overlap_data['total_unique'] = val
+        elif qtype == 'pp_unique':
+            overlap_data['per_pp'][key1] = val
+        elif qtype == 'overlap':
+            overlap_data['overlap'][key1] = val
+        elif qtype == 'combo':
+            overlap_data['top_combos'].append({'combo': key1, 'users': val})
+
+    naive_sum = sum(overlap_data['per_pp'].values())
+    multi_pp = naive_sum - overlap_data['total_unique']
+    print(f"  True unique users: {overlap_data['total_unique']:,}")
+    print(f"  Naive sum across PPs: {naive_sum:,} (overlap of {multi_pp:,})")
+    for pp, count in sorted(overlap_data['per_pp'].items()):
+        print(f"    {pp}: {count:,}")
+
+    return overlap_data
+
+
+def _hardcoded_user_overlap():
+    """Fallback hardcoded user overlap data."""
+    return {
+        'total_unique': 42162,
+        'per_pp': {'AFib': 2927, 'Cardio': 13003, 'CnO Pro': 24179, 'Respiratory': 8412, 'Tesla': 114},
+        'overlap': {'1': 36297, '2': 5281, '3': 561, '4': 22, '5': 1},
+        'top_combos': [
+            {'combo': 'Cardio + CnO Pro', 'users': 2007},
+            {'combo': 'Cardio + Respiratory', 'users': 1464},
+            {'combo': 'CnO Pro + Respiratory', 'users': 931},
+            {'combo': 'Cardio + CnO Pro + Respiratory', 'users': 399},
+            {'combo': 'AFib + CnO Pro', 'users': 364},
+            {'combo': 'AFib + Respiratory', 'users': 321},
+            {'combo': 'AFib + Cardio', 'users': 162},
+        ],
+    }
+
+
+# ============================================================
 # FETCH COUNTRY REVENUE (Card 9061 - raw revenue data with COUNTRY)
 # ============================================================
 def fetch_country_revenue():
@@ -771,7 +901,7 @@ def fetch_country_revenue():
 # ============================================================
 # TEMPLATE INJECTION
 # ============================================================
-def inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, channel_data):
+def inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, channel_data, user_overlap):
     """Replace placeholder tokens in the template with real data."""
     print("Injecting data into template...")
 
@@ -784,6 +914,7 @@ def inject_data(template, revenue_data, purchase_data, trial_data, user_data, co
     output = output.replace('/*__USER_DATA__*/{}', json.dumps(user_data, separators=(',', ':')))
     output = output.replace('/*__COUNTRY_REVENUE_DATA__*/{}', json.dumps(country_revenue, separators=(',', ':')))
     output = output.replace('/*__CHANNEL_DATA__*/{}', json.dumps(channel_data, separators=(',', ':')))
+    output = output.replace('/*__USER_OVERLAP__*/{}', json.dumps(user_overlap, separators=(',', ':')))
     output = output.replace('/*__LAST_UPDATED__*/', now)
 
     # Google Sheets config
@@ -837,9 +968,10 @@ def main():
     purchase_data = build_purchase_data(revenue_data)
     user_data = fetch_user_data()
     channel_data = fetch_channel_data()
+    user_overlap = fetch_user_overlap()
 
     # Inject into template
-    output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, channel_data)
+    output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, channel_data, user_overlap)
 
     # Write output
     OUTPUT_FILE.write_text(output)
