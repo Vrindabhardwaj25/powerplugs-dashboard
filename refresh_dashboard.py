@@ -96,11 +96,21 @@ COUNTRY_MAP = {
     'netherlands': 'Netherlands',
     'singapore': 'Singapore',
     'philippines': 'Philippines',
+    'france': 'France',
+    'mexico': 'Mexico',
+    'poland': 'Poland',
+    'saudi arabia': 'Saudi Arabia',
+    'austria': 'Austria',
+    'italy': 'Italy',
+    'italia': 'Italy',
+    'belgium': 'Belgium',
+    'new zealand': 'New Zealand',
 }
 
 DASHBOARD_COUNTRIES = ['USA', 'India', 'Canada', 'UK + IR', 'Australia', 'Germany',
                        'UAE', 'Czech Republic', 'Thailand', 'Switzerland', 'Spain',
-                       'Netherlands', 'Singapore', 'Philippines']
+                       'Netherlands', 'Singapore', 'Philippines', 'France', 'Mexico',
+                       'Poland', 'Saudi Arabia', 'Austria', 'Italy', 'Belgium', 'New Zealand']
 
 # Data start date
 DATA_START_DATE = '2025-09-01'
@@ -114,12 +124,22 @@ def mb_headers():
         'Content-Type': 'application/json',
     }
 
-def mb_post(endpoint, payload=None):
-    """POST request to Metabase API."""
+def mb_post(endpoint, payload=None, retries=3):
+    """POST request to Metabase API with retry logic."""
+    import time
     url = f"{METABASE_URL}/api/{endpoint}"
-    resp = requests.post(url, headers=mb_headers(), json=payload or {}, timeout=120)
-    resp.raise_for_status()
-    return resp.json()
+    for attempt in range(retries):
+        try:
+            resp = requests.post(url, headers=mb_headers(), json=payload or {}, timeout=300)
+            resp.raise_for_status()
+            return resp.json()
+        except (requests.exceptions.Timeout, requests.exceptions.HTTPError) as e:
+            if attempt < retries - 1:
+                wait = 10 * (attempt + 1)
+                print(f"  Retry {attempt+1}/{retries} after {wait}s: {e}")
+                time.sleep(wait)
+            else:
+                raise
 
 def mb_get(endpoint):
     """GET request to Metabase API."""
@@ -131,9 +151,10 @@ def mb_get(endpoint):
 # ============================================================
 # FETCH REVENUE DATA (Card 9444 - Native SQL)
 # ============================================================
-def fetch_revenue_data():
+def derive_revenue_from_country_data(country_revenue):
     """
-    Fetches revenue data from Metabase card 9444.
+    Derives global REVENUE_DATA by summing across all countries from country_revenue.
+    This avoids the need for card 9444 (which can timeout).
     Returns dict in the format:
     {
       "2025-09": {
@@ -143,71 +164,38 @@ def fetch_revenue_data():
       }, ...
     }
     """
-    print("Fetching revenue data from card 9444...")
+    print("Deriving global revenue data from country revenue...")
 
-    today = datetime.now().strftime('%Y-%m-%d')
+    # Collect all dates per month across all countries
+    month_dates = defaultdict(set)
+    for country, months in country_revenue.items():
+        for month_key, mdata in months.items():
+            for d in mdata.get('dates', []):
+                month_dates[month_key].add(d)
 
-    result = mb_post(f'card/{REVENUE_CARD_ID}/query', {
-        'parameters': [
-            {'type': 'text', 'value': '1', 'target': ['variable', ['template-tag', 'date_level']], 'id': REVENUE_TAG_IDS['date_level']},
-            {'type': 'date/single', 'value': DATA_START_DATE, 'target': ['variable', ['template-tag', 'start_date']], 'id': REVENUE_TAG_IDS['start_date']},
-            {'type': 'date/single', 'value': today, 'target': ['variable', ['template-tag', 'end_date']], 'id': REVENUE_TAG_IDS['end_date']},
-        ]
-    })
-
-    rows = result.get('data', {}).get('rows', [])
-    cols = [c['name'] for c in result.get('data', {}).get('cols', [])]
-
-    print(f"  Got {len(rows)} revenue rows, columns: {cols}")
-
-    if not rows:
-        print("  WARNING: No revenue rows returned!")
-        return {}
-
-    # Expected columns: DATE_TRUNC, PRODUCT_ID, AMOUNT_USD, SUBSCRIPTION (count)
-    # Columns are positional: [0]=date, [1]=product, [2]=amount, [3]=subscription_count
-    date_idx = 0
-    product_idx = 1
-    amount_idx = 2
-    sub_idx = 3
-    print(f"  Column mapping: date={cols[date_idx]}, product={cols[product_idx]}, amount={cols[amount_idx]}, subs={cols[sub_idx]}")
-
-    # Group by month -> date -> PP -> revenue & subs
-    monthly = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {'revenue': 0, 'subs': 0})))
-
-    for row in rows:
-        date_str = row[date_idx][:10]  # "2025-09-01T00:00:00" -> "2025-09-01"
-        pp_raw = row[product_idx]
-        amount = float(row[amount_idx] or 0)
-        subs = int(row[sub_idx] or 0)
-
-        pp_key = pp_raw.strip().lower() if pp_raw else ''
-        pp = PP_MAP.get(pp_key, None)
-        if not pp:
-            # Try exact match (some values are already proper names)
-            for k, v in PP_MAP.items():
-                if v.lower() == pp_key:
-                    pp = v
-                    break
-            if not pp:
-                print(f"  WARNING: Unknown PP type: '{pp_raw}', skipping")
-                continue
-
-        month_key = date_str[:7]  # "2025-09"
-        monthly[month_key][date_str][pp]['revenue'] += round(amount, 2)
-        monthly[month_key][date_str][pp]['subs'] += subs
-
-    # Build the final structure
+    # Sum revenue/subs across all countries for each date
     revenue_data = {}
-    for month_key in sorted(monthly.keys()):
-        dates = sorted(monthly[month_key].keys())
-        rev_by_pp = {p: [] for p in PLUGS}
-        subs_by_pp = {p: [] for p in PLUGS}
+    for month_key in sorted(month_dates.keys()):
+        dates = sorted(month_dates[month_key])
+        rev_by_pp = {p: [0.0] * len(dates) for p in PLUGS}
+        subs_by_pp = {p: [0] * len(dates) for p in PLUGS}
 
-        for d in dates:
-            for p in PLUGS:
-                rev_by_pp[p].append(round(monthly[month_key][d][p]['revenue'], 2))
-                subs_by_pp[p].append(monthly[month_key][d][p]['subs'])
+        date_idx_map = {d: i for i, d in enumerate(dates)}
+
+        for country, months in country_revenue.items():
+            if month_key not in months:
+                continue
+            cdata = months[month_key]
+            for ci, cd in enumerate(cdata.get('dates', [])):
+                if cd in date_idx_map:
+                    gi = date_idx_map[cd]
+                    for p in PLUGS:
+                        rev_by_pp[p][gi] += round(cdata['revenue'].get(p, [0] * len(cdata['dates']))[ci] if ci < len(cdata['revenue'].get(p, [])) else 0, 2)
+                        subs_by_pp[p][gi] += cdata['subscriptions'].get(p, [0] * len(cdata['dates']))[ci] if ci < len(cdata['subscriptions'].get(p, [])) else 0
+
+        # Round final values
+        for p in PLUGS:
+            rev_by_pp[p] = [round(v, 2) for v in rev_by_pp[p]]
 
         revenue_data[month_key] = {
             'dates': dates,
@@ -216,6 +204,9 @@ def fetch_revenue_data():
         }
 
     print(f"  Revenue data: {len(revenue_data)} months ({', '.join(sorted(revenue_data.keys()))})")
+    for mk in sorted(revenue_data.keys()):
+        total = sum(sum(revenue_data[mk]['revenue'][p]) for p in PLUGS)
+        print(f"    {mk}: {len(revenue_data[mk]['dates'])} days, ${total:,.0f}")
     return revenue_data
 
 
@@ -524,19 +515,14 @@ def fetch_country_revenue():
 
     today = datetime.now().strftime('%Y-%m-%d')
 
-    # Fetch in monthly chunks to avoid row truncation at 2000 rows
+    # Fetch in 2-week chunks to avoid gateway timeouts on heavy months
     all_rows = []
     start = datetime.strptime(DATA_START_DATE, '%Y-%m-%d')
     end = datetime.now()
 
     current = start
     while current < end:
-        if current.month == 12:
-            next_month = current.replace(year=current.year + 1, month=1, day=1)
-        else:
-            next_month = current.replace(month=current.month + 1, day=1)
-
-        period_end = min(next_month - timedelta(days=1), end)
+        period_end = min(current + timedelta(days=14), end)
         period_start_str = current.strftime('%Y-%m-%d')
         period_end_str = period_end.strftime('%Y-%m-%d')
 
@@ -573,7 +559,7 @@ def fetch_country_revenue():
         except Exception as e:
             print(f"    WARNING: Failed to fetch country revenue for {period_start_str}: {e}")
 
-        current = next_month
+        current = period_end + timedelta(days=1)
 
     print(f"  Total country revenue rows: {len(all_rows)}")
 
@@ -702,12 +688,16 @@ def main():
     # Read template
     template = TEMPLATE_FILE.read_text()
 
-    # Fetch data
+    # Fetch data — country revenue first, then derive global revenue from it
+    # (avoids card 9444 which frequently times out)
     try:
-        revenue_data = fetch_revenue_data()
+        country_revenue = fetch_country_revenue()
     except Exception as e:
-        print(f"ERROR fetching revenue data: {e}")
+        print(f"ERROR fetching country revenue: {e}")
         sys.exit(1)
+
+    # Derive global revenue by summing across all countries
+    revenue_data = derive_revenue_from_country_data(country_revenue)
 
     try:
         trial_data = fetch_trial_data()
@@ -717,12 +707,6 @@ def main():
 
     purchase_data = build_purchase_data(revenue_data)
     user_data = fetch_user_data()
-
-    try:
-        country_revenue = fetch_country_revenue()
-    except Exception as e:
-        print(f"WARNING: Failed to fetch country revenue: {e}")
-        country_revenue = {}
 
     # Inject into template
     output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue)
