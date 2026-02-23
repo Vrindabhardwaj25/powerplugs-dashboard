@@ -369,8 +369,8 @@ const REVENUE_DATA = /*__REVENUE_DATA__*/{};
 
 const PURCHASE_DATA = /*__PURCHASE_DATA__*/{};
 
-// Country-wise revenue data (injected by refresh_dashboard.py)
-// Format: { "2025-09": { "USA": {"AFib": 1234, ...}, "India": {...}, "_total": {...} }, ... }
+// Country-wise DAILY revenue data (injected by refresh_dashboard.py)
+// Format: { "USA": { "2025-09": { dates: [...], revenue: {AFib: [...], ...}, subscriptions: {...} } }, ... }
 const COUNTRY_REVENUE_DATA = /*__COUNTRY_REVENUE_DATA__*/{};
 
 // Trial vs Converted data from Metabase (injected by refresh_dashboard.py)
@@ -454,15 +454,39 @@ function switchTab(tabId) {
 function getPlugs() { return currentPP === 'All' ? PLUGS : [currentPP]; }
 function sum(arr) { return arr.reduce((a,b) => a+b, 0); }
 function isAllTime() { return currentMonth === 'all-time'; }
-function getMonthKeys() { return isAllTime() ? Object.keys(REVENUE_DATA).sort() : [currentMonth]; }
+function getActiveCountryName() {
+  if (currentCountry === 'All') return null;
+  return countryCodeToName(currentCountry);
+}
+
+function getMonthKeys() {
+  const src = getActiveCountryName() ? (COUNTRY_REVENUE_DATA[getActiveCountryName()] || {}) : REVENUE_DATA;
+  return isAllTime() ? Object.keys(src).sort() : [currentMonth];
+}
 
 function getMonthDays(mk) {
   const [y,m] = mk.split('-').map(Number);
   return new Date(y, m, 0).getDate();
 }
 
-function getRevForMonth(mk) { return REVENUE_DATA[mk] || null; }
-function getPurchForMonth(mk) { return PURCHASE_DATA[mk] || null; }
+function getRevForMonth(mk) {
+  const cn = getActiveCountryName();
+  if (cn) {
+    // Use country-specific daily data
+    return COUNTRY_REVENUE_DATA[cn]?.[mk] || null;
+  }
+  return REVENUE_DATA[mk] || null;
+}
+function getPurchForMonth(mk) {
+  const cn = getActiveCountryName();
+  if (cn) {
+    // Country data has subscriptions which = purchases
+    const cd = COUNTRY_REVENUE_DATA[cn]?.[mk];
+    if (!cd) return null;
+    return { dates: cd.dates, purchases: cd.subscriptions };
+  }
+  return PURCHASE_DATA[mk] || null;
+}
 
 function getMonthlyRevenue(plug, mk) {
   const d = getRevForMonth(mk);
@@ -643,47 +667,55 @@ function renderUserStats() {
 // ============================================================
 let currentCountry = 'All';
 
+function getCountryMonthlyRevenue(country, plug, mk) {
+  // Get monthly revenue for a specific country and plug
+  const cdata = COUNTRY_REVENUE_DATA[country]?.[mk];
+  if (!cdata) return 0;
+  return sum(cdata.revenue[plug] || []);
+}
+
 function renderCountryRevenue() {
   const container = document.getElementById('countryRevenueTable');
   if (!container) return;
 
   const plugs = getPlugs();
-  const allMonths = Object.keys(COUNTRY_REVENUE_DATA).sort();
   const countryFilter = currentCountry;
   const countryName = countryFilter !== 'All' ? countryCodeToName(countryFilter) : null;
 
   // If a specific country is selected, show monthly breakdown for that country
   if (countryName) {
-    return renderSingleCountryRevenue(container, plugs, allMonths, countryName);
+    const countryMonths = Object.keys(COUNTRY_REVENUE_DATA[countryName] || {}).sort();
+    return renderSingleCountryRevenue(container, plugs, countryMonths, countryName);
   }
 
-  // "All Countries" view: show ranked table for selected month(s)
-  const months = getMonthKeys();
+  // "All Countries" view: show ranked table across all months
+  // Use the global month keys (all-time or selected month)
+  const months = isAllTime() ? Object.keys(REVENUE_DATA).sort() : [currentMonth];
 
   // Aggregate country revenue across selected months
   const countryTotals = {};
   const grandTotal = {};
   plugs.forEach(p => grandTotal[p] = 0);
 
-  months.forEach(mk => {
-    const mdata = COUNTRY_REVENUE_DATA[mk];
-    if (!mdata) return;
-    for (const [country, ppData] of Object.entries(mdata)) {
-      if (country === '_total') continue;
+  // Iterate over all countries in COUNTRY_REVENUE_DATA
+  for (const [country, countryMonths] of Object.entries(COUNTRY_REVENUE_DATA)) {
+    months.forEach(mk => {
+      const mdata = countryMonths[mk];
+      if (!mdata) return;
       if (!countryTotals[country]) {
         countryTotals[country] = {};
         plugs.forEach(p => countryTotals[country][p] = 0);
       }
       plugs.forEach(p => {
-        const val = ppData[p] || 0;
+        const val = sum(mdata.revenue[p] || []);
         countryTotals[country][p] += val;
         grandTotal[p] += val;
       });
-    }
-  });
+    });
+  }
 
   const sortedCountries = Object.keys(countryTotals).sort((a, b) => {
-    return plugs.reduce((s, p) => s + countryTotals[b][p], 0) - plugs.reduce((s, p) => s + countryTotals[a][p], 0);
+    return plugs.reduce((s, p) => s + (countryTotals[b][p]||0), 0) - plugs.reduce((s, p) => s + (countryTotals[a][p]||0), 0);
   });
 
   const overallTotal = plugs.reduce((s, p) => s + grandTotal[p], 0);
@@ -694,10 +726,11 @@ function renderCountryRevenue() {
 
   sortedCountries.forEach(country => {
     const ct = countryTotals[country];
-    const rowTotal = plugs.reduce((s, p) => s + ct[p], 0);
+    const rowTotal = plugs.reduce((s, p) => s + (ct[p]||0), 0);
+    if (rowTotal === 0) return;
     const share = overallTotal > 0 ? ((rowTotal / overallTotal) * 100).toFixed(1) : '0.0';
     html += `<tr><td style="font-weight:600;color:#ccc">${country}</td>`;
-    plugs.forEach(p => html += `<td>$${Math.round(ct[p]).toLocaleString()}</td>`);
+    plugs.forEach(p => html += `<td>$${Math.round(ct[p]||0).toLocaleString()}</td>`);
     html += `<td style="font-weight:700">$${Math.round(rowTotal).toLocaleString()}</td>`;
     html += `<td style="color:#7c5cfc">${share}%</td></tr>`;
   });
@@ -726,24 +759,22 @@ function renderSingleCountryRevenue(container, plugs, allMonths, countryName) {
   let grandTotal = 0, grandGlobal = 0;
 
   allMonths.forEach(mk => {
-    const mdata = COUNTRY_REVENUE_DATA[mk];
-    if (!mdata) return;
-    const cdata = mdata[countryName] || {};
-    const globalData = mdata['_total'] || {};
+    const cdata = COUNTRY_REVENUE_DATA[countryName]?.[mk];
+    // Global total from REVENUE_DATA
+    const globalRev = plugs.reduce((s, p) => s + (REVENUE_DATA[mk] ? sum(REVENUE_DATA[mk].revenue[p] || []) : 0), 0);
     const label = new Date(mk + '-01').toLocaleString('default', { month: 'short', year: 'numeric' });
     let rowTotal = 0;
-    const globalTotal = plugs.reduce((s, p) => s + (globalData[p] || 0), 0);
 
     html += `<tr><td>${label}</td>`;
     plugs.forEach(p => {
-      const val = Math.round(cdata[p] || 0);
+      const val = Math.round(cdata ? sum(cdata.revenue[p] || []) : 0);
       rowTotal += val;
       grandPP[p] += val;
       html += `<td>$${val.toLocaleString()}</td>`;
     });
     grandTotal += rowTotal;
-    grandGlobal += globalTotal;
-    const pctGlobal = globalTotal > 0 ? ((rowTotal / globalTotal) * 100).toFixed(1) : '0.0';
+    grandGlobal += globalRev;
+    const pctGlobal = globalRev > 0 ? ((rowTotal / globalRev) * 100).toFixed(1) : '0.0';
     html += `<td style="font-weight:700">$${rowTotal.toLocaleString()}</td>`;
     html += `<td style="color:#7c5cfc">${pctGlobal}%</td></tr>`;
   });
@@ -793,7 +824,7 @@ function renderRevenueChart() {
   const plugs = getPlugs();
 
   if (isAllTime()) {
-    const months = Object.keys(REVENUE_DATA).sort();
+    const months = getMonthKeys();
     const labels = months.map(m => { const d = new Date(m+'-01'); return d.toLocaleString('default',{month:'short',year:'2-digit'}); });
     const datasets = [];
     if (currentPP === 'All') {
@@ -869,7 +900,7 @@ function renderTrialChart() {
   function getConvVal(p, mk) { return hasRealTrialData(p) ? getMonthlyConverted(p, mk) : getMonthlyPurchases(p, mk); }
 
   if (isAllTime()) {
-    const months = Object.keys(REVENUE_DATA).sort();
+    const months = getMonthKeys();
     const labels = months.map(m => { const d = new Date(m+'-01'); return d.toLocaleString('default',{month:'short',year:'2-digit'}); });
     const trialData = months.map(mk => plugs.reduce((s,p) => s + getTrialVal(p,mk), 0));
     const convData = months.map(mk => plugs.reduce((s,p) => s + getConvVal(p,mk), 0));
@@ -959,7 +990,7 @@ function renderInsights() {
 
   if (isAllTime()) {
     // MoM trend analysis
-    const allMonths = Object.keys(REVENUE_DATA).sort();
+    const allMonths = getMonthKeys();
     const revByMonth = allMonths.map(mk => plugs.reduce((s,p) => s + getMonthlyRevenue(p,mk), 0));
     const purchByMonth = allMonths.map(mk => plugs.reduce((s,p) => s + getMonthlyPurchases(p,mk), 0));
     const subsByMonth = allMonths.map(mk => plugs.reduce((s,p) => s + getMonthlySubs(p,mk), 0));
@@ -1048,7 +1079,7 @@ function renderInsights() {
   }
 
   // Compare to previous month
-  const allMonths = Object.keys(REVENUE_DATA).sort();
+  const allMonths = getMonthKeys();
   const mkIdx = allMonths.indexOf(mk);
   let momHtml = '';
   if (mkIdx > 0) {
@@ -1121,7 +1152,7 @@ function renderProjectionTable() {
   const container = document.getElementById('projectionTable');
   const plugs = getPlugs();
   if (isAllTime()) {
-    const months = Object.keys(REVENUE_DATA).sort();
+    const months = getMonthKeys();
     let html = '<table class="projection-table"><thead><tr><th>Month</th>';
     plugs.forEach(p => html += `<th>${displayName(p)}</th>`);
     html += '<th>Total</th></tr></thead><tbody>';

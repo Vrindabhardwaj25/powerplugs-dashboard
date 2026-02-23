@@ -504,21 +504,23 @@ def _hardcoded_user_data():
 # ============================================================
 def fetch_country_revenue():
     """
-    Fetches revenue data broken down by country and powerplug.
+    Fetches DAILY revenue data broken down by country and powerplug.
     Uses card 9061 (underlying raw revenue data that includes COUNTRY column).
 
-    Returns dict in the format:
+    Returns dict with per-country daily data matching REVENUE_DATA structure:
     {
-      "2025-09": {
-        "USA": {"AFib": 1234.56, "Cardio": 5678.90, ...},
-        "India": {...},
-        ...
-        "_total": {"AFib": ..., ...}  # all countries total
+      "USA": {
+        "2025-09": {
+          "dates": ["2025-09-01", "2025-09-02", ...],
+          "revenue": {"AFib": [10.5, 20.3, ...], "Cardio": [...], ...},
+          "subscriptions": {"AFib": [1, 2, ...], ...}
+        }, ...
       },
+      "India": { ... },
       ...
     }
     """
-    print("Fetching country-wise revenue from card 9061 via MBQL...")
+    print("Fetching daily country-wise revenue from card 9061 via MBQL...")
 
     today = datetime.now().strftime('%Y-%m-%d')
 
@@ -552,7 +554,7 @@ def fetch_country_revenue():
                 'breakout': [
                     ['field', 'COUNTRY', {'base-type': 'type/Text'}],
                     ['field', 'PRODUCT_ID', {'base-type': 'type/Text'}],
-                    ['field', 'PURCHASE_DATE', {'base-type': 'type/DateTimeWithLocalTZ', 'temporal-unit': 'month'}],
+                    ['field', 'PURCHASE_DATE', {'base-type': 'type/DateTimeWithLocalTZ', 'temporal-unit': 'day'}],
                 ],
                 'filter': [
                     'between',
@@ -579,15 +581,14 @@ def fetch_country_revenue():
         print("  WARNING: No country revenue data returned!")
         return {}
 
-    # Rows: [COUNTRY, PRODUCT_ID, DATE_TRUNC(month), SUM_AMOUNT_USD, COUNT]
-    # Group by month -> country -> PP -> revenue
-    monthly = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
-    monthly_counts = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    # Rows: [COUNTRY, PRODUCT_ID, PURCHASE_DATE(day), SUM_AMOUNT_USD, COUNT]
+    # Group by country -> month -> date -> PP -> {revenue, subs}
+    raw = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {'revenue': 0, 'subs': 0})))
 
     for row in all_rows:
         country_raw = row[0] or ''
         pp_raw = row[1] or ''
-        date_str = row[2][:7] if row[2] else ''  # "2025-09-01" -> "2025-09"
+        date_str = row[2][:10] if row[2] else ''  # "2025-09-01T00:00:00" -> "2025-09-01"
         amount = float(row[3] or 0)
         count = int(row[4] or 0)
 
@@ -597,13 +598,11 @@ def fetch_country_revenue():
         # Normalize country name
         country = COUNTRY_MAP.get(country_raw.lower().strip(), None)
         if not country:
-            # If not in our dashboard countries, bucket it into "Other"
             country = 'Other'
 
         # Map PP name
         pp = PP_MAP.get(pp_raw.lower().strip(), None)
         if not pp:
-            # Try exact match
             for k, v in PP_MAP.items():
                 if v.lower() == pp_raw.lower().strip():
                     pp = v
@@ -611,41 +610,46 @@ def fetch_country_revenue():
             if not pp:
                 continue
 
-        monthly[date_str][country][pp] += round(amount, 2)
-        monthly_counts[date_str][country][pp] += count
+        month_key = date_str[:7]
+        raw[country][(month_key, date_str)][pp]['revenue'] += round(amount, 2)
+        raw[country][(month_key, date_str)][pp]['subs'] += count
 
-    # Build final structure
+    # Build final structure: country -> month -> {dates, revenue{PP: [...]}, subscriptions{PP: [...]}}
     country_revenue = {}
-    for month_key in sorted(monthly.keys()):
-        month_data = {}
-        all_countries_total = defaultdict(float)
+    for country in sorted(raw.keys()):
+        # Collect all (month, date) pairs for this country
+        month_dates = defaultdict(set)
+        for (mk, d) in raw[country].keys():
+            month_dates[mk].add(d)
 
-        for country in DASHBOARD_COUNTRIES + ['Other']:
-            if country in monthly[month_key]:
-                country_data = {}
-                for pp in PLUGS:
-                    rev = round(monthly[month_key][country].get(pp, 0), 2)
-                    country_data[pp] = rev
-                    all_countries_total[pp] += rev
-                # Only include countries with non-zero revenue
-                if any(v > 0 for v in country_data.values()):
-                    month_data[country] = country_data
+        country_months = {}
+        for month_key in sorted(month_dates.keys()):
+            dates = sorted(month_dates[month_key])
+            rev_by_pp = {p: [] for p in PLUGS}
+            subs_by_pp = {p: [] for p in PLUGS}
 
-        # Add total row
-        month_data['_total'] = {pp: round(all_countries_total[pp], 2) for pp in PLUGS}
+            for d in dates:
+                for p in PLUGS:
+                    day_data = raw[country].get((month_key, d), {}).get(p, {'revenue': 0, 'subs': 0})
+                    rev_by_pp[p].append(round(day_data['revenue'], 2))
+                    subs_by_pp[p].append(day_data['subs'])
 
-        country_revenue[month_key] = month_data
+            country_months[month_key] = {
+                'dates': dates,
+                'revenue': rev_by_pp,
+                'subscriptions': subs_by_pp,
+            }
+
+        country_revenue[country] = country_months
 
     # Print summary
-    for mk in sorted(country_revenue.keys()):
-        countries_with_data = [c for c in country_revenue[mk] if c != '_total']
-        total_rev = sum(country_revenue[mk]['_total'].values())
-        print(f"  {mk}: {len(countries_with_data)} countries, ${total_rev:,.0f} total")
-        # Top 3 countries
-        ranked = sorted(countries_with_data, key=lambda c: sum(country_revenue[mk][c].values()), reverse=True)
-        for c in ranked[:3]:
-            crev = sum(country_revenue[mk][c].values())
-            print(f"    {c}: ${crev:,.0f}")
+    for country in sorted(country_revenue.keys()):
+        months = sorted(country_revenue[country].keys())
+        total_rev = 0
+        for mk in months:
+            for p in PLUGS:
+                total_rev += sum(country_revenue[country][mk]['revenue'].get(p, []))
+        print(f"  {country}: {len(months)} months, ${total_rev:,.0f} total")
 
     return country_revenue
 
