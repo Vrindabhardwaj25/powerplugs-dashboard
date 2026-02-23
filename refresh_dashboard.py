@@ -491,6 +491,134 @@ def _hardcoded_user_data():
 
 
 # ============================================================
+# FETCH CHANNEL DATA (Snowflake all_purchase via Metabase native query)
+# ============================================================
+def fetch_channel_data():
+    """
+    Fetches channel breakdown from Snowflake all_purchase table via Metabase native SQL.
+    Groups PURCHASE_CHANNEL into 6 categories:
+    - In-App (Product in-app buy buttons)
+    - Organic (others)
+    - Influencer Marketing
+    - Performance Marketing
+    - Referrals (Product in-app Referrals)
+    - Other Channels (Inside Sales, Reengagement Communication, Social, Blog, Partnerships)
+    """
+    print("Fetching channel breakdown via Metabase native query...")
+
+    sql = f"""
+    SELECT
+      CASE
+        WHEN POWERPLUG_PLAN LIKE 'AFib%' THEN 'AFib'
+        WHEN POWERPLUG_PLAN LIKE 'Cardio%' THEN 'Cardio'
+        WHEN POWERPLUG_PLAN LIKE 'CnO%' THEN 'CnO Pro'
+        WHEN POWERPLUG_PLAN LIKE 'respiratory%' THEN 'Respiratory'
+        WHEN POWERPLUG_PLAN LIKE 'tesla%' THEN 'Tesla'
+        ELSE 'Other'
+      END as PP,
+      CASE
+        WHEN PURCHASE_CHANNEL = 'Product in-app buy buttons' THEN 'In-App'
+        WHEN PURCHASE_CHANNEL = 'others' THEN 'Organic'
+        WHEN PURCHASE_CHANNEL = 'Influencer Marketing' THEN 'Influencer Marketing'
+        WHEN PURCHASE_CHANNEL = 'Performance Marketing' THEN 'Performance Marketing'
+        WHEN PURCHASE_CHANNEL = 'Product in-app Referrals' THEN 'Referrals'
+        ELSE 'Other Channels'
+      END as CHANNEL,
+      ROUND(SUM(AMOUNT_USD), 2) as TOTAL_REV,
+      COUNT(*) as PURCHASES
+    FROM "all_purchase"
+    WHERE PRODUCT_CATEGORY = 'powerplug'
+      AND TO_DATE(PURCHASE_DATE) >= '{DATA_START_DATE}'
+    GROUP BY PP, CHANNEL
+    ORDER BY PP, TOTAL_REV DESC
+    """
+
+    query = {
+        'database': TRIAL_DATABASE_ID,
+        'type': 'native',
+        'native': {
+            'query': sql,
+        },
+    }
+
+    try:
+        result = mb_post('dataset', query)
+        rows = result.get('data', {}).get('rows', [])
+        print(f"  Got {len(rows)} channel rows")
+    except Exception as e:
+        print(f"  WARNING: Failed to fetch channel data: {e}")
+        print("  Using hardcoded channel data fallback...")
+        return _hardcoded_channel_data()
+
+    if not rows:
+        print("  WARNING: No channel rows returned, using hardcoded fallback")
+        return _hardcoded_channel_data()
+
+    # Build nested dict: { PP: { Channel: { revenue, purchases } } }
+    channel_data = {}
+    for row in rows:
+        pp, channel, rev, purchases = row[0], row[1], float(row[2] or 0), int(row[3] or 0)
+        if pp == 'Other':
+            continue
+        if pp not in channel_data:
+            channel_data[pp] = {}
+        channel_data[pp][channel] = {'revenue': round(rev, 2), 'purchases': purchases}
+
+    for pp in PLUGS:
+        if pp in channel_data:
+            pp_total = sum(ch['revenue'] for ch in channel_data[pp].values())
+            print(f"  {pp}: ${pp_total:,.0f} across {len(channel_data[pp])} channels")
+
+    return channel_data
+
+
+def _hardcoded_channel_data():
+    """Fallback hardcoded channel data from Snowflake query (Sep 2025 - Feb 2026)."""
+    return {
+        'AFib': {
+            'In-App': {'revenue': 70507.39, 'purchases': 4064},
+            'Organic': {'revenue': 35449.09, 'purchases': 526},
+            'Influencer Marketing': {'revenue': 10909.72, 'purchases': 140},
+            'Performance Marketing': {'revenue': 10020.68, 'purchases': 124},
+            'Referrals': {'revenue': 1412.94, 'purchases': 17},
+            'Other Channels': {'revenue': 2996.18, 'purchases': 38},
+        },
+        'Cardio': {
+            'In-App': {'revenue': 141196.01, 'purchases': 16434},
+            'Organic': {'revenue': 138610.47, 'purchases': 6321},
+            'Influencer Marketing': {'revenue': 18776.55, 'purchases': 523},
+            'Performance Marketing': {'revenue': 15244.84, 'purchases': 416},
+            'Referrals': {'revenue': 4232.13, 'purchases': 110},
+            'Other Channels': {'revenue': 4982.28, 'purchases': 162},
+        },
+        'CnO Pro': {
+            'In-App': {'revenue': 412197.91, 'purchases': 34154},
+            'Organic': {'revenue': 290054.12, 'purchases': 16959},
+            'Influencer Marketing': {'revenue': 27720.45, 'purchases': 526},
+            'Performance Marketing': {'revenue': 20271.48, 'purchases': 408},
+            'Referrals': {'revenue': 3216.51, 'purchases': 60},
+            'Other Channels': {'revenue': 5164.80, 'purchases': 114},
+        },
+        'Respiratory': {
+            'In-App': {'revenue': 154063.53, 'purchases': 10199},
+            'Organic': {'revenue': 8711.62, 'purchases': 246},
+            'Influencer Marketing': {'revenue': 2622.15, 'purchases': 74},
+            'Performance Marketing': {'revenue': 372.69, 'purchases': 11},
+            'Referrals': {'revenue': 303.74, 'purchases': 8},
+            'Other Channels': {'revenue': 184.50, 'purchases': 6},
+        },
+        'Tesla': {
+            'In-App': {'revenue': 2256.53, 'purchases': 203},
+            'Organic': {'revenue': 1090.20, 'purchases': 77},
+            'Influencer Marketing': {'revenue': 0, 'purchases': 0},
+            'Performance Marketing': {'revenue': 0, 'purchases': 0},
+            'Referrals': {'revenue': 0, 'purchases': 0},
+            'Other Channels': {'revenue': 0, 'purchases': 0},
+        },
+    }
+
+
+# ============================================================
 # FETCH COUNTRY REVENUE (Card 9061 - raw revenue data with COUNTRY)
 # ============================================================
 def fetch_country_revenue():
@@ -643,7 +771,7 @@ def fetch_country_revenue():
 # ============================================================
 # TEMPLATE INJECTION
 # ============================================================
-def inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue):
+def inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, channel_data):
     """Replace placeholder tokens in the template with real data."""
     print("Injecting data into template...")
 
@@ -655,6 +783,7 @@ def inject_data(template, revenue_data, purchase_data, trial_data, user_data, co
     output = output.replace('/*__TRIAL_DATA__*/{}', json.dumps(trial_data, separators=(',', ':')))
     output = output.replace('/*__USER_DATA__*/{}', json.dumps(user_data, separators=(',', ':')))
     output = output.replace('/*__COUNTRY_REVENUE_DATA__*/{}', json.dumps(country_revenue, separators=(',', ':')))
+    output = output.replace('/*__CHANNEL_DATA__*/{}', json.dumps(channel_data, separators=(',', ':')))
     output = output.replace('/*__LAST_UPDATED__*/', now)
 
     # Google Sheets config
@@ -707,9 +836,10 @@ def main():
 
     purchase_data = build_purchase_data(revenue_data)
     user_data = fetch_user_data()
+    channel_data = fetch_channel_data()
 
     # Inject into template
-    output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue)
+    output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, channel_data)
 
     # Write output
     OUTPUT_FILE.write_text(output)

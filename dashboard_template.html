@@ -249,6 +249,11 @@
       <div class="subtitle">Number of powerplug purchases per day</div>
       <div class="chart-container"><canvas id="purchaseChart"></canvas></div>
     </div>
+    <div class="chart-card full-width">
+      <h2>Channel Breakdown</h2>
+      <div class="subtitle">Revenue by acquisition channel per powerplug (Source: Snowflake all_purchase · PURCHASE_CHANNEL)</div>
+      <div id="channelBreakdown"></div>
+    </div>
     <div class="chart-card" id="insightRevCard">
       <h2>Revenue Insights</h2>
       <div class="subtitle">Auto-generated from revenue data</div>
@@ -282,7 +287,7 @@
     <div class="disclaimer-item">C&amp;O Pro and C&amp;O Plus are separate products available in different countries. Revenue data is currently combined under C&amp;O Pro/Plus.</div>
     <div class="disclaimer-item">Cardio Adaptability and AFib are the same powerplug &mdash; in some countries one is available and in some the other.</div>
     <div class="disclaimer-item">One user may use multiple powerplugs. Total active users is not a simple sum of per-powerplug counts.</div>
-    <div class="disclaimer-item">Revenue data is sourced from Metabase (card 9061). Purchase channels: <strong style="color:#7c5cfc">RevenueCat ~56%</strong>, <strong style="color:#3b82f6">Shopify ~28%</strong>, <strong style="color:#22c55e">Stripe ~16%</strong> of total powerplug revenue.</div>
+    <div class="disclaimer-item">Revenue data is sourced from Metabase (card 9061). Channel breakdown sourced from Snowflake <code>all_purchase</code> table (PURCHASE_CHANNEL column). "In-App" = Product in-app buy buttons, "Organic" = unattributed/direct, "Referrals" = in-app referral program.</div>
     <div class="disclaimer-item">Retention Rate = Paid Users / Total Users (trial + paid). ARPU = Total Revenue / Paid Users for the selected period.</div>
     <div class="disclaimer-item"><span style="opacity:0.6">\u{1F4A4}</span> in the purchases chart marks weekend days (typically lower volume). Faded bars = weekends.</div>
   </div>
@@ -404,6 +409,11 @@ function getMonthlyTrials(plug, mk) { const d = getTrialDataForMonth(plug, mk); 
 function getMonthlyConverted(plug, mk) { const d = getTrialDataForMonth(plug, mk); return d ? sum(d.converted) : 0; }
 function hasRealTrialData(plug) { return !!TRIAL_DATA[plug]; }
 
+// Channel Breakdown Data (from Snowflake all_purchase table, PURCHASE_CHANNEL column)
+// Grouped into: In-App (Product in-app buy buttons), Organic (others), Influencer Marketing,
+// Performance Marketing, Referrals, and Other Channels (Inside Sales, Reengagement, Social, Blog, Partnerships)
+const CHANNEL_DATA = /*__CHANNEL_DATA__*/{};
+
 // ============================================================
 // STATE & INIT
 // ============================================================
@@ -458,7 +468,7 @@ async function init() {
 }
 
 function renderAll() {
-  renderKPIs(); renderAlerts(); renderUserStats(); renderRevenueChart(); renderPPLegend(); renderTrialChart(); renderPurchaseChart(); renderInsights(); renderProjectionTable(); renderCampaignTracker(); renderCountryRevenue();
+  renderKPIs(); renderAlerts(); renderUserStats(); renderRevenueChart(); renderPPLegend(); renderTrialChart(); renderPurchaseChart(); renderChannelBreakdown(); renderInsights(); renderProjectionTable(); renderCampaignTracker(); renderCountryRevenue();
 }
 
 // ============================================================
@@ -1143,6 +1153,129 @@ function renderPPLegend() {
   html += `<div class="pp-legend-item"><div style="width:24px;height:0;border-top:2.5px solid #7c5cfc;"></div>Total/Actual</div>`;
   html += `<div class="pp-legend-item"><div style="width:24px;height:0;border-top:2.5px dotted #7c5cfc;"></div>Projected</div>`;
   html += `<div class="pp-legend-item"><div style="width:24px;height:0;border-top:2.5px dashed #f59e0b;"></div>Plan Target</div>`;
+  container.innerHTML = html;
+}
+
+// ============================================================
+// CHANNEL BREAKDOWN
+// ============================================================
+function renderChannelBreakdown() {
+  const container = document.getElementById('channelBreakdown');
+  if (!container || !CHANNEL_DATA || !Object.keys(CHANNEL_DATA).length) {
+    if (container) container.innerHTML = '<div style="color:#555;font-size:13px;padding:10px">No channel data available.</div>';
+    return;
+  }
+
+  const plugs = getPlugs();
+  const CHANNEL_COLORS = {
+    'In-App': '#7c5cfc',
+    'Organic': '#22c55e',
+    'Influencer Marketing': '#f59e0b',
+    'Performance Marketing': '#3b82f6',
+    'Referrals': '#ec4899',
+    'Other Channels': '#6b7280'
+  };
+  const channelOrder = ['In-App', 'Organic', 'Influencer Marketing', 'Performance Marketing', 'Referrals', 'Other Channels'];
+
+  // Aggregate by selected PP(s)
+  let channelTotals = {};
+  channelOrder.forEach(c => channelTotals[c] = 0);
+
+  plugs.forEach(p => {
+    const ppData = CHANNEL_DATA[p];
+    if (!ppData) return;
+    Object.keys(ppData).forEach(ch => {
+      if (channelTotals.hasOwnProperty(ch)) channelTotals[ch] += ppData[ch].revenue;
+    });
+  });
+
+  const grandTotal = Object.values(channelTotals).reduce((s,v) => s+v, 0);
+
+  // Build per-PP breakdown table
+  let html = '';
+
+  // Legend
+  html += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">';
+  channelOrder.forEach(ch => {
+    html += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa"><div style="width:12px;height:12px;border-radius:3px;background:${CHANNEL_COLORS[ch]}"></div>${ch}</div>`;
+  });
+  html += '</div>';
+
+  // Overall horizontal stacked bar
+  html += '<div style="margin-bottom:20px">';
+  html += '<div style="font-size:12px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Overall Split · $' + (grandTotal/1000).toFixed(0) + 'K total</div>';
+  html += '<div style="display:flex;height:32px;border-radius:8px;overflow:hidden;background:#1a1a2e">';
+  channelOrder.forEach(ch => {
+    const pct = grandTotal > 0 ? (channelTotals[ch] / grandTotal * 100) : 0;
+    if (pct > 0) {
+      html += `<div style="width:${pct}%;background:${CHANNEL_COLORS[ch]};display:flex;align-items:center;justify-content:center;font-size:${pct > 8 ? '11' : '9'}px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden" title="${ch}: $${(channelTotals[ch]/1000).toFixed(1)}K (${pct.toFixed(1)}%)">${pct >= 5 ? pct.toFixed(0) + '%' : ''}</div>`;
+    }
+  });
+  html += '</div></div>';
+
+  // Per-PP rows
+  const showPlugs = currentPP === 'All' ? PLUGS : [currentPP];
+  html += '<div style="display:grid;gap:10px">';
+  showPlugs.forEach(p => {
+    const ppData = CHANNEL_DATA[p];
+    if (!ppData) return;
+    const ppTotal = channelOrder.reduce((s,ch) => s + (ppData[ch]?.revenue || 0), 0);
+    if (ppTotal <= 0) return;
+
+    html += '<div style="display:grid;grid-template-columns:100px 1fr 80px;align-items:center;gap:12px">';
+    // PP name
+    const badgeClass = p === 'CnO Pro' ? 'badge-CnO' : p === 'AFib' ? 'badge-AFib' : p === 'Cardio' ? 'badge-Cardio' : p === 'Respiratory' ? 'badge-Respiratory' : 'badge-Tesla';
+    html += `<div><span class="plug-badge ${badgeClass}">${p}</span></div>`;
+    // Stacked bar
+    html += '<div style="display:flex;height:24px;border-radius:6px;overflow:hidden;background:#12121e">';
+    channelOrder.forEach(ch => {
+      const rev = ppData[ch]?.revenue || 0;
+      const pct = ppTotal > 0 ? (rev / ppTotal * 100) : 0;
+      if (pct > 0) {
+        html += `<div style="width:${pct}%;background:${CHANNEL_COLORS[ch]};display:flex;align-items:center;justify-content:center;font-size:${pct > 10 ? '10' : '8'}px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden" title="${ch}: $${(rev/1000).toFixed(1)}K (${pct.toFixed(1)}%)">${pct >= 8 ? pct.toFixed(0) + '%' : ''}</div>`;
+      }
+    });
+    html += '</div>';
+    // Total
+    html += `<div style="font-size:12px;color:#aaa;text-align:right">$${(ppTotal/1000).toFixed(1)}K</div>`;
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Channel detail table
+  html += '<div style="margin-top:18px;overflow-x:auto">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html += '<thead><tr style="border-bottom:1px solid #2a2a3e"><th style="text-align:left;padding:8px 10px;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:0.8px">Channel</th>';
+  showPlugs.forEach(p => {
+    html += `<th style="text-align:right;padding:8px 10px;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:0.8px">${p}</th>`;
+  });
+  html += '<th style="text-align:right;padding:8px 10px;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:0.8px">Total</th><th style="text-align:right;padding:8px 10px;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:0.8px">%</th></tr></thead><tbody>';
+
+  channelOrder.forEach(ch => {
+    html += '<tr style="border-bottom:1px solid #1a1a2e">';
+    html += `<td style="padding:7px 10px;color:#e0e0e0"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${CHANNEL_COLORS[ch]};margin-right:8px;vertical-align:middle"></span>${ch}</td>`;
+    showPlugs.forEach(p => {
+      const rev = CHANNEL_DATA[p]?.[ch]?.revenue || 0;
+      html += `<td style="text-align:right;padding:7px 10px;color:${rev > 0 ? '#ccc' : '#444'}">$${(rev/1000).toFixed(1)}K</td>`;
+    });
+    const total = channelTotals[ch] || 0;
+    const pct = grandTotal > 0 ? (total / grandTotal * 100).toFixed(1) : '0.0';
+    html += `<td style="text-align:right;padding:7px 10px;color:#fff;font-weight:600">$${(total/1000).toFixed(1)}K</td>`;
+    html += `<td style="text-align:right;padding:7px 10px;color:#7c5cfc;font-weight:600">${pct}%</td>`;
+    html += '</tr>';
+  });
+
+  // Grand total row
+  html += '<tr style="border-top:2px solid #2a2a3e"><td style="padding:8px 10px;color:#fff;font-weight:700">Total</td>';
+  showPlugs.forEach(p => {
+    const ppTotal = channelOrder.reduce((s,ch) => s + (CHANNEL_DATA[p]?.[ch]?.revenue || 0), 0);
+    html += `<td style="text-align:right;padding:8px 10px;color:#fff;font-weight:700">$${(ppTotal/1000).toFixed(1)}K</td>`;
+  });
+  html += `<td style="text-align:right;padding:8px 10px;color:#fff;font-weight:700">$${(grandTotal/1000).toFixed(1)}K</td>`;
+  html += '<td style="text-align:right;padding:8px 10px;color:#7c5cfc;font-weight:700">100%</td></tr>';
+
+  html += '</tbody></table></div>';
+
   container.innerHTML = html;
 }
 
