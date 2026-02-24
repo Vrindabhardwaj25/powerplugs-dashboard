@@ -257,11 +257,11 @@
     <div class="chart-card full-width">
       <h2>Subscription Plan Mix</h2>
       <div class="subtitle">Revenue breakdown by Monthly / Yearly / 2-Year plans over time</div>
-      <div style="margin:10px 0 14px;padding:10px 14px;background:rgba(124,92,252,0.06);border:1px solid rgba(124,92,252,0.2);border-radius:8px;font-size:12px;color:#bbb;line-height:1.7">
-        <span style="color:#f59e0b;font-weight:600">Monthly</span> $3&ndash;$5/mo (median $4) &nbsp;&middot;&nbsp;
-        <span style="color:#7c5cfc;font-weight:600">Yearly</span> $24&ndash;$54/yr (median $40) &nbsp;&middot;&nbsp;
-        <span style="color:#4ade80;font-weight:600">2-Year</span> $37&ndash;$91 (median $45)
-        <span style="color:#555">&nbsp;&middot;&nbsp; p5&ndash;p95 range, excluding outlier local-currency conversions</span>
+      <div style="margin:10px 0 14px;padding:10px 14px;background:rgba(124,92,252,0.06);border:1px solid rgba(124,92,252,0.2);border-radius:8px;font-size:12px;color:#bbb;line-height:1.9">
+        <span style="color:#fff;font-weight:600">Pricing per PP (mode price, minor FX variations):</span><br/>
+        <span style="color:#f59e0b;font-weight:600">Monthly:</span> Cardio ~$3 &middot; CnO Pro ~$4 &middot; Respiratory ~$4 &middot; AFib ~$5&ndash;$7 &middot; Tesla ~$7<br/>
+        <span style="color:#7c5cfc;font-weight:600">Yearly:</span> Cardio ~$24 &middot; CnO Pro ~$40 &middot; Respiratory ~$40 &middot; AFib ~$48&ndash;$64 &middot; Tesla ~$69<br/>
+        <span style="color:#4ade80;font-weight:600">2-Year:</span> Cardio ~$38 &middot; CnO Pro ~$70 &middot; AFib ~$77&ndash;$104
       </div>
       <div class="chart-container" style="height:320px"><canvas id="planMixChart"></canvas></div>
       <div id="planMixTable" style="margin-top:14px"></div>
@@ -449,7 +449,7 @@ Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Rob
 Chart.defaults.plugins.datalabels = { display: false };
 
 async function init() {
-  document.getElementById('lastUpdated').textContent = 'Feb 24, 2026 at 05:07 PM' || new Date().toLocaleString();
+  document.getElementById('lastUpdated').textContent = 'Feb 24, 2026 at 05:16 PM' || new Date().toLocaleString();
   const sel = document.getElementById('filterMonth');
   const allMonths = [...new Set([...Object.keys(REVENUE_DATA), ...Object.keys(PURCHASE_DATA)])].sort();
   sel.innerHTML = '<option value="all-time">All Time (Monthly)</option>';
