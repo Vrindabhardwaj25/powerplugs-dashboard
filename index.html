@@ -460,7 +460,7 @@ Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Rob
 Chart.defaults.plugins.datalabels = { display: false };
 
 async function init() {
-  document.getElementById('lastUpdated').textContent = 'Feb 24, 2026 at 05:57 PM' || new Date().toLocaleString();
+  document.getElementById('lastUpdated').textContent = 'Feb 24, 2026 at 06:09 PM' || new Date().toLocaleString();
   const sel = document.getElementById('filterMonth');
   const allMonths = [...new Set([...Object.keys(REVENUE_DATA), ...Object.keys(PURCHASE_DATA)])].sort();
   sel.innerHTML = '<option value="all-time">All Time (Monthly)</option>';
@@ -777,15 +777,14 @@ function renderKPIs() {
   const arpu = totalPaidUsers > 0 ? (totalRev / totalPaidUsers).toFixed(2) : '\u2014';
 
   // Trial → Paid conversion rate (from card 19529: converted / trial users)
-  const totalTrials = plugs.reduce((s,p) => {
-    const months2 = getMonthKeys();
-    return s + months2.reduce((s2,mk) => s2 + getMonthlyTrials(p, mk), 0);
-  }, 0);
-  const totalConverted = plugs.reduce((s,p) => {
-    const months2 = getMonthKeys();
-    return s + months2.reduce((s2,mk) => s2 + getMonthlyConverted(p, mk), 0);
-  }, 0);
-  const convRate = totalTrials > 0 ? ((totalConverted / totalTrials) * 100).toFixed(1) + '%' : '\u2014';
+  // Use eligible trials (excluding users whose free trial hasn't ended)
+  const months2 = getMonthKeys();
+  const totalTrials = plugs.reduce((s,p) => s + months2.reduce((s2,mk) => s2 + getMonthlyTrials(p, mk), 0), 0);
+  const totalConverted = plugs.reduce((s,p) => s + months2.reduce((s2,mk) => s2 + getMonthlyConverted(p, mk), 0), 0);
+  const totalStillOnTrial = plugs.reduce((s,p) => s + months2.reduce((s2,mk) => s2 + getStillOnTrial(p, mk), 0), 0);
+  const eligibleTrials = totalTrials - totalStillOnTrial;
+  const convRate = eligibleTrials > 0 ? ((totalConverted / eligibleTrials) * 100).toFixed(1) + '%' : (totalTrials > 0 ? ((totalConverted / totalTrials) * 100).toFixed(1) + '%' : '\u2014');
+  const convSuffix = totalStillOnTrial > 0 ? ` <span style="font-size:10px;color:#fbbf24">(${totalStillOnTrial.toLocaleString()} on trial)</span>` : '';
 
   const revLabel = hasCustomDates() ? 'Revenue (Custom)' : (isAllTime() ? 'Total Revenue' : 'Revenue (MTD)');
   const purchLabel = hasCustomDates() ? 'Purchases (Custom)' : (isAllTime() ? 'Total Purchases' : 'Purchases (MTD)');
@@ -795,9 +794,9 @@ function renderKPIs() {
     { label: 'Plan Target', value: targetVal },
     { label: purchLabel, value: totalPurch.toLocaleString() },
     { label: 'ARPU', value: arpu !== '\u2014' ? '$' + arpu : arpu },
-    { label: 'Trial \u2192 Paid *', value: convRate },
+    { label: 'Trial \u2192 Paid *', value: convRate, sub: totalStillOnTrial > 0 ? `${totalStillOnTrial.toLocaleString()} still on trial` : '' },
   ];
-  strip.innerHTML = kpis.map(k => `<div class="kpi-card"><div class="label">${k.label}</div><div class="value">${k.value}</div></div>`).join('');
+  strip.innerHTML = kpis.map(k => `<div class="kpi-card"><div class="label">${k.label}</div><div class="value">${k.value}</div>${k.sub ? `<div class="kpi-sub" style="color:#fbbf24">${k.sub}</div>` : ''}</div>`).join('');
 
   // Render definitions below KPI strip
   let defEl = document.getElementById('kpiDefinitions');
@@ -813,7 +812,7 @@ function renderKPIs() {
   }
   defs.push(`<b>Purchases ${hasCustomDates()?'(Custom)':isAllTime()?'':'(MTD)'}</b> = Total subscription purchases ${hasCustomDates()?'in selected date range':isAllTime()?'across all months':'in the selected month to date'} for selected Powerplugs.`);
   defs.push(`<b>ARPU</b> = Total Revenue \u00f7 Paid Users (from all_purchase, deduplicated by email).`);
-  defs.push(`<b>* Trial \u2192 Paid</b> = Converted Users \u00f7 Trial Users for the selected period (source: RevCat trial data). All users in purchase data are paid users.`);
+  defs.push(`<b>* Trial \u2192 Paid</b> = Converted Users \u00f7 Eligible Trial Users (excludes users whose free trial hasn\u2019t ended yet). Trial windows: C&O 7\u201330 days, Others 3\u20137 days. Source: RevCat.`);
   defEl.innerHTML = defs.join(' &nbsp;\u2022&nbsp; ');
 }
 
@@ -1662,6 +1661,40 @@ function renderRevenueChart() {
 // ============================================================
 const DATALABEL_OPTS = { display: true, anchor: 'end', align: 'end', color: '#ccc', font: { size: 11, weight: '600' }, formatter: v => v > 0 ? v.toLocaleString() : '' };
 
+// Max trial duration in days per PP (longest trial = yearly plan trial)
+const TRIAL_WINDOW_DAYS = {
+  'cno_pro_n_plus': 30, // 7d monthly, 30d yearly
+  'AFib': 7,            // 3d monthly, 7d yearly
+  'Cardio': 7,          // 3d monthly, 7d yearly
+  'Respiratory': 7,     // 3d monthly, 7d yearly
+  'Tesla': 7,           // 3d monthly, 7d yearly
+};
+
+// Compute "still on trial" count: trial users from last N days who haven't converted yet
+function getStillOnTrial(pp, mk) {
+  const td = getTrialDataForMonth(pp, mk);
+  if (!td || !td.dates || !td.trial) return 0;
+  const window = TRIAL_WINDOW_DAYS[pp] || 7;
+  const today = new Date();
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() - window);
+  let stillOnTrial = 0;
+  for (let i = 0; i < td.dates.length; i++) {
+    const d = new Date(td.dates[i] + 'T00:00:00');
+    if (d > cutoff) {
+      // These users started trial within the window — some may not have had time to convert
+      const notConverted = (td.trial[i] || 0) - (td.converted[i] || 0);
+      if (notConverted > 0) stillOnTrial += notConverted;
+    }
+  }
+  return stillOnTrial;
+}
+
+// Eligible trials = total trials minus those still within trial window
+function getEligibleTrials(pp, mk) {
+  return Math.max(0, (hasRealTrialData(pp) ? getMonthlyTrials(pp, mk) : getMonthlySubs(pp, mk)) - getStillOnTrial(pp, mk));
+}
+
 function renderTrialChart() {
   if (charts.trial) charts.trial.destroy();
   const ctx = document.getElementById('trialChart').getContext('2d');
@@ -1676,34 +1709,52 @@ function renderTrialChart() {
     const labels = months.map(m => { const d = new Date(m+'-01'); return d.toLocaleString('default',{month:'short',year:'2-digit'}); });
     const trialData = months.map(mk => plugs.reduce((s,p) => s + getTrialVal(p,mk), 0));
     const convData = months.map(mk => plugs.reduce((s,p) => s + getConvVal(p,mk), 0));
-    charts.trial = new Chart(ctx, { type: 'bar', data: { labels, datasets: [
+    const onTrialData = months.map(mk => plugs.reduce((s,p) => s + getStillOnTrial(p,mk), 0));
+    const datasets = [
       { label: 'Trial Users', data: trialData, backgroundColor: 'rgba(124,92,252,0.35)', borderColor: '#7c5cfc', borderWidth: 1, borderRadius: 4, datalabels: DATALABEL_OPTS },
       { label: 'Converted (Paid)', data: convData, backgroundColor: 'rgba(74,222,128,0.35)', borderColor: '#4ade80', borderWidth: 1, borderRadius: 4, datalabels: {...DATALABEL_OPTS, color: '#4ade80'} },
-    ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 11 } } } }, scales: { y: { beginAtZero: true } } } });
+    ];
+    // Only show "Still on Trial" bar if there are any
+    if (onTrialData.some(v => v > 0)) {
+      datasets.push({ label: 'Still on Trial', data: onTrialData, backgroundColor: 'rgba(251,191,36,0.30)', borderColor: '#fbbf24', borderWidth: 1, borderRadius: 4, datalabels: {...DATALABEL_OPTS, color: '#fbbf24'} });
+    }
+    charts.trial = new Chart(ctx, { type: 'bar', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true } } } });
     return;
   }
 
   const labels = plugs.map(displayName);
   const trialValues = plugs.map(p => getTrialVal(p, currentMonth));
   const convValues = plugs.map(p => getConvVal(p, currentMonth));
-  charts.trial = new Chart(ctx, { type: 'bar', data: { labels, datasets: [
+  const onTrialValues = plugs.map(p => getStillOnTrial(p, currentMonth));
+  const eligibleValues = plugs.map(p => getEligibleTrials(p, currentMonth));
+  const datasets = [
     { label: 'Trial Users', data: trialValues, backgroundColor: 'rgba(124,92,252,0.35)', borderColor: '#7c5cfc', borderWidth: 1, borderRadius: 6, datalabels: DATALABEL_OPTS },
     { label: 'Converted (Paid)', data: convValues, backgroundColor: 'rgba(74,222,128,0.35)', borderColor: '#4ade80', borderWidth: 1, borderRadius: 6, datalabels: {...DATALABEL_OPTS, color: '#4ade80'} },
-  ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 11 } } } }, scales: { y: { beginAtZero: true } } } });
+  ];
+  if (onTrialValues.some(v => v > 0)) {
+    datasets.push({ label: 'Still on Trial', data: onTrialValues, backgroundColor: 'rgba(251,191,36,0.30)', borderColor: '#fbbf24', borderWidth: 1, borderRadius: 6, datalabels: {...DATALABEL_OPTS, color: '#fbbf24'} });
+  }
+  charts.trial = new Chart(ctx, { type: 'bar', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true } } } });
 
-  // Render conversion % callouts below chart
+  // Render conversion % callouts below chart — show raw + eligible rate
   const calloutEl = document.getElementById('trialConversionCallouts');
   if (calloutEl) {
+    const hasOnTrial = onTrialValues.some(v => v > 0);
     let html = '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">';
     plugs.forEach((p, i) => {
-      const rate = trialValues[i] > 0 ? ((convValues[i] / trialValues[i]) * 100).toFixed(1) : '0.0';
+      const rawRate = trialValues[i] > 0 ? ((convValues[i] / trialValues[i]) * 100).toFixed(1) : '0.0';
+      const eligRate = eligibleValues[i] > 0 ? ((convValues[i] / eligibleValues[i]) * 100).toFixed(1) : rawRate;
       const color = COLORS[p]?.border || '#888';
+      const showElig = hasOnTrial && eligibleValues[i] !== trialValues[i];
       html += `<div style="background:rgba(255,255,255,0.03);border:1px solid ${color}33;border-radius:6px;padding:5px 10px;text-align:center;min-width:70px">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#888">${displayName(p)}</div>
-        <div style="font-size:15px;font-weight:700;color:${color}">${rate}%</div>
+        ${showElig ? `<div style="font-size:15px;font-weight:700;color:${color}">${eligRate}%</div><div style="font-size:9px;color:#555">eligible conv.</div>` : `<div style="font-size:15px;font-weight:700;color:${color}">${rawRate}%</div>`}
       </div>`;
     });
     html += '</div>';
+    if (hasOnTrial) {
+      html += `<div style="margin-top:6px;font-size:10px;color:#666;text-align:center">⚠️ Eligible conv. rate excludes users whose free trial hasn't ended yet</div>`;
+    }
     calloutEl.innerHTML = html;
   }
 }
