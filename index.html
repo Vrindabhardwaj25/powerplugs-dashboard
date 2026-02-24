@@ -434,7 +434,7 @@ Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Rob
 Chart.defaults.plugins.datalabels = { display: false };
 
 async function init() {
-  document.getElementById('lastUpdated').textContent = 'Feb 24, 2026 at 04:05 PM' || new Date().toLocaleString();
+  document.getElementById('lastUpdated').textContent = 'Feb 24, 2026 at 04:15 PM' || new Date().toLocaleString();
   const sel = document.getElementById('filterMonth');
   const allMonths = [...new Set([...Object.keys(REVENUE_DATA), ...Object.keys(PURCHASE_DATA)])].sort();
   sel.innerHTML = '<option value="all-time">All Time (Monthly)</option>';
@@ -1837,16 +1837,20 @@ function renderProjectionTable() {
   const plugs = getPlugs();
   if (isAllTime()) {
     const months = getMonthKeys();
+    // Pre-compute grand total for % share
+    let grandTotal = 0;
+    months.forEach(mk => plugs.forEach(p => { grandTotal += Math.round(getMonthlyRevenue(p, mk)); }));
     let html = '<table class="projection-table"><thead><tr><th>Month</th>';
     plugs.forEach(p => html += `<th>${displayName(p)}</th>`);
-    html += '<th>Total</th></tr></thead><tbody>';
+    html += '<th>Total</th><th>% of Total</th></tr></thead><tbody>';
     months.forEach(mk => {
       const d = new Date(mk+'-01');
       const label = d.toLocaleString('default',{month:'short',year:'numeric'});
       let rowTotal = 0;
       html += `<tr><td>${label}</td>`;
       plugs.forEach(p => { const v = Math.round(getMonthlyRevenue(p,mk)); rowTotal += v; html += `<td>$${v.toLocaleString()}</td>`; });
-      html += `<td style="font-weight:700">$${rowTotal.toLocaleString()}</td></tr>`;
+      const pctShare = grandTotal > 0 ? (rowTotal / grandTotal * 100).toFixed(1) + '%' : '\u2014';
+      html += `<td style="font-weight:700">$${rowTotal.toLocaleString()}</td><td style="color:#888">${pctShare}</td></tr>`;
     });
     html += '</tbody></table>';
     container.innerHTML = html;
@@ -1879,6 +1883,10 @@ function renderProjectionTable() {
     return getMonthlyPurchases(p, m);
   }
 
+  // Pre-compute total MTD revenue for % share calculation
+  let grandMtd = 0;
+  plugs.forEach(p => { grandMtd += Math.round(getMonthlyRevenue(p, mk)); });
+
   let rows = plugs.map(p => {
     const mtd = Math.round(getMonthlyRevenue(p,mk));
     const avg = Math.round(mtd/daysElapsed);
@@ -1888,7 +1896,8 @@ function renderProjectionTable() {
     const activeUsers = (USER_DATA[p]?.users || 0);
     const onTrial = getTrialCount(p, mk);
     const paidUsers = getPaidCount(p, mk);
-    return `<tr><td><span class="plug-badge ${getBadgeClass(p)}">${displayName(p)}</span></td><td style="color:#aaa">${activeUsers > 0 ? activeUsers.toLocaleString() : '\u2014'}</td><td style="color:#7c5cfc">${onTrial.toLocaleString()}</td><td style="color:#4ade80">${paidUsers.toLocaleString()}</td><td>$${mtd.toLocaleString()}</td><td>$${avg.toLocaleString()}</td><td class="projected">$${proj.toLocaleString()}</td><td class="target-col">${pt>0?'$'+pt.toLocaleString():'\u2014'}</td><td>${purch.toLocaleString()}</td></tr>`;
+    const pctShare = grandMtd > 0 ? (mtd / grandMtd * 100).toFixed(1) + '%' : '\u2014';
+    return `<tr><td><span class="plug-badge ${getBadgeClass(p)}">${displayName(p)}</span></td><td style="color:#aaa">${activeUsers > 0 ? activeUsers.toLocaleString() : '\u2014'}</td><td style="color:#7c5cfc">${onTrial.toLocaleString()}</td><td style="color:#4ade80">${paidUsers.toLocaleString()}</td><td>$${mtd.toLocaleString()}</td><td style="color:#888">${pctShare}</td><td>$${avg.toLocaleString()}</td><td class="projected">$${proj.toLocaleString()}</td><td class="target-col">${pt>0?'$'+pt.toLocaleString():'\u2014'}</td><td>${purch.toLocaleString()}</td></tr>`;
   });
 
   if (plugs.length > 1) {
@@ -1896,13 +1905,12 @@ function renderProjectionTable() {
     plugs.forEach(p => { tMtd+=Math.round(getMonthlyRevenue(p,mk)); tPurch+=getMonthlyPurchases(p,mk); tTarget+=(campaigns[p]||[]).reduce((s,c)=>s+(Number(c.expectedRevenue)||0),0); tOnTrial+=getTrialCount(p,mk); tPaid+=getPaidCount(p,mk); });
     tTarget += (campaigns['General']||[]).reduce((s,c)=>s+(Number(c.expectedRevenue)||0),0);
     const tAvg=Math.round(tMtd/daysElapsed), tProj=Math.round(tAvg*daysInMonth);
-    // Total active users: use dedicated total if available, else note it's not a simple sum
     const totalActiveUsers = USER_DATA._total?.users || null;
     const totalActiveStr = totalActiveUsers ? totalActiveUsers.toLocaleString() : '\u2014*';
-    rows.push(`<tr style="font-weight:700;border-top:2px solid #7c5cfc"><td>Total</td><td style="color:#aaa">${totalActiveStr}</td><td style="color:#7c5cfc">${tOnTrial.toLocaleString()}</td><td style="color:#4ade80">${tPaid.toLocaleString()}</td><td>$${tMtd.toLocaleString()}</td><td>$${tAvg.toLocaleString()}</td><td class="projected">$${tProj.toLocaleString()}</td><td class="target-col">${tTarget>0?'$'+tTarget.toLocaleString():'\u2014'}</td><td>${tPurch.toLocaleString()}</td></tr>`);
+    rows.push(`<tr style="font-weight:700;border-top:2px solid #7c5cfc"><td>Total</td><td style="color:#aaa">${totalActiveStr}</td><td style="color:#7c5cfc">${tOnTrial.toLocaleString()}</td><td style="color:#4ade80">${tPaid.toLocaleString()}</td><td>$${tMtd.toLocaleString()}</td><td style="color:#888">100%</td><td>$${tAvg.toLocaleString()}</td><td class="projected">$${tProj.toLocaleString()}</td><td class="target-col">${tTarget>0?'$'+tTarget.toLocaleString():'\u2014'}</td><td>${tPurch.toLocaleString()}</td></tr>`);
   }
 
-  container.innerHTML = `<table class="projection-table"><thead><tr><th>Powerplug</th><th>Active Users</th><th>On Trial</th><th>Paid Users</th><th>Revenue MTD</th><th>Daily Avg</th><th>Projected</th><th>Target</th><th>Purchases</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  container.innerHTML = `<table class="projection-table"><thead><tr><th>Powerplug</th><th>Active Users</th><th>On Trial</th><th>Paid Users</th><th>Revenue MTD</th><th>% Share</th><th>Daily Avg</th><th>Projected</th><th>Target</th><th>Purchases</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
 // ============================================================
