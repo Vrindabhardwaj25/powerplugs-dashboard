@@ -33,6 +33,8 @@
   .kpi-card { background: linear-gradient(135deg, #16162a 0%, #1c1c32 100%); border: 1px solid #2a2a3e; border-radius: 12px; padding: 18px; }
   .kpi-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #888; margin-bottom: 6px; }
   .kpi-card .value { font-size: 24px; font-weight: 700; color: #fff; }
+  .kpi-card .kpi-sub { font-size: 10px; color: #555; margin-top: 4px; line-height: 1.3; }
+  .kpi-definitions { padding: 0 40px 4px; font-size: 10px; color: #555; line-height: 1.5; }
   .dashboard { padding: 0 40px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .chart-card { background: linear-gradient(135deg, #16162a 0%, #1c1c32 100%); border: 1px solid #2a2a3e; border-radius: 12px; padding: 22px; }
   .chart-card.full-width { grid-column: 1 / -1; }
@@ -432,7 +434,7 @@ Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Rob
 Chart.defaults.plugins.datalabels = { display: false };
 
 async function init() {
-  document.getElementById('lastUpdated').textContent = 'Feb 24, 2026 at 01:57 PM' || new Date().toLocaleString();
+  document.getElementById('lastUpdated').textContent = 'Feb 24, 2026 at 02:06 PM' || new Date().toLocaleString();
   const sel = document.getElementById('filterMonth');
   const allMonths = [...new Set([...Object.keys(REVENUE_DATA), ...Object.keys(PURCHASE_DATA)])].sort();
   sel.innerHTML = '<option value="all-time">All Time (Monthly)</option>';
@@ -681,11 +683,25 @@ function renderKPIs() {
     { label: isAllTime() ? 'Total Revenue' : 'Revenue (MTD)', value: '$' + Math.round(totalRev).toLocaleString() },
     { label: 'Projected Monthly', value: projectedRev },
     { label: 'Plan Target', value: targetVal },
-    { label: 'Total Purchases', value: totalPurch.toLocaleString() },
+    { label: isAllTime() ? 'Total Purchases' : 'Purchases (MTD)', value: totalPurch.toLocaleString() },
     { label: 'ARPU', value: arpu !== '\u2014' ? '$' + arpu : arpu },
-    { label: 'Retention Rate', value: retentionRate },
+    { label: 'Retention Rate *', value: retentionRate },
   ];
   strip.innerHTML = kpis.map(k => `<div class="kpi-card"><div class="label">${k.label}</div><div class="value">${k.value}</div></div>`).join('');
+
+  // Render definitions below KPI strip
+  let defEl = document.getElementById('kpiDefinitions');
+  if (!defEl) {
+    defEl = document.createElement('div');
+    defEl.id = 'kpiDefinitions';
+    defEl.className = 'kpi-definitions';
+    strip.parentNode.insertBefore(defEl, strip.nextSibling);
+  }
+  const defs = [];
+  defs.push(`<b>Purchases ${isAllTime()?'':'(MTD)'}</b> = Total subscription purchases ${isAllTime()?'across all months':'in the selected month to date'} for selected Powerplugs.`);
+  defs.push(`<b>ARPU</b> = Total Revenue \u00f7 Paid Users for the selected period.`);
+  defs.push(`<b>* Retention Rate</b> = Paid Users \u00f7 Total Users (all-time, cumulative). This is a paid conversion ratio, not a cohort-based retention metric.`);
+  defEl.innerHTML = defs.join(' &nbsp;\u2022&nbsp; ');
 }
 
 // ============================================================
