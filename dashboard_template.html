@@ -153,49 +153,20 @@
 </style>
 </head>
 <body>
-<div id="authGate" style="position:fixed;inset:0;z-index:9999;background:#0a0a0f;display:flex;align-items:center;justify-content:center">
-  <div style="text-align:center;max-width:340px;width:100%">
-    <div style="font-size:28px;font-weight:700;color:#fff;margin-bottom:6px"><span style="color:#7c5cfc">Powerplugs</span> Dashboard</div>
-    <div style="font-size:13px;color:#666;margin-bottom:28px">Enter password to continue</div>
-    <input id="authInput" type="password" placeholder="Password" autofocus
-      style="width:100%;padding:12px 16px;background:#16162a;border:1px solid #2a2a3e;border-radius:10px;color:#fff;font-size:15px;outline:none;margin-bottom:12px"
-      onfocus="this.style.borderColor='#7c5cfc'" onblur="this.style.borderColor='#2a2a3e'">
-    <div id="authError" style="color:#ef4444;font-size:12px;margin-bottom:10px;display:none">Incorrect password</div>
-    <button onclick="checkAuth()" style="width:100%;padding:11px;background:#7c5cfc;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Enter</button>
-  </div>
-</div>
-<script>
-// SHA-256 hash of password — not plaintext in source
-const AUTH_HASH = 'ad495a46d5e5e1ac1438b77829ca9b8aec1d30970b1dd0ec3d5008a9e8cec98f';
-async function sha256(str) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
-async function checkAuth() {
-  const input = document.getElementById('authInput').value;
-  const hash = await sha256(input);
-  if (hash === AUTH_HASH) {
-    sessionStorage.setItem('pp_auth', hash);
-    document.getElementById('authGate').style.display = 'none';
-  } else {
-    document.getElementById('authError').style.display = 'block';
-    document.getElementById('authInput').style.borderColor = '#ef4444';
-  }
-}
-document.addEventListener('DOMContentLoaded', async () => {
-  if (sessionStorage.getItem('pp_auth') === AUTH_HASH) {
-    document.getElementById('authGate').style.display = 'none';
-  }
-});
-document.getElementById('authInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkAuth(); });
-</script>
 <div class="header">
   <h1><span>Powerplugs</span> Daily Dashboard</h1>
   <div class="header-meta" style="display:flex;align-items:center;gap:12px">
     <span>Last updated: <span id="lastUpdated"></span></span>
     <button id="refreshBtn" onclick="refreshDashboard()" style="background:rgba(124,92,252,0.15);border:1px solid rgba(124,92,252,0.3);color:#7c5cfc;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.2s" onmouseover="this.style.background='rgba(124,92,252,0.25)'" onmouseout="this.style.background='rgba(124,92,252,0.15)'"><span id="refreshIcon" style="display:inline-block;transition:transform 0.3s">&#x21bb;</span> Refresh</button>
+    <span id="userBadge" style="display:flex;align-items:center;gap:6px;font-size:12px;color:#888"></span>
+    <a href="/auth/logout" style="font-size:11px;color:#555;text-decoration:none" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#555'">Logout</a>
   </div>
 </div>
+<script>
+fetch('/auth/user').then(r=>r.ok?r.json():null).then(u=>{
+  if(u){const b=document.getElementById('userBadge');if(b)b.innerHTML=`<img src="${u.photo||''}" style="width:22px;height:22px;border-radius:50%;border:1px solid #2a2a3e" onerror="this.style.display='none'">${u.name||u.email}`;}
+});
+</script>
 <div class="filter-bar">
   <div class="filter-group">
     <label>Powerplug</label>
