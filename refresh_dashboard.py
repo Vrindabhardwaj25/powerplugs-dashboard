@@ -491,134 +491,6 @@ def _hardcoded_user_data():
 
 
 # ============================================================
-# FETCH CHANNEL DATA (Snowflake all_purchase via Metabase native query)
-# ============================================================
-def fetch_channel_data():
-    """
-    Fetches channel breakdown from Snowflake all_purchase table via Metabase native SQL.
-    Groups PURCHASE_CHANNEL into 6 categories:
-    - In-App (Product in-app buy buttons)
-    - Organic (others)
-    - Influencer Marketing
-    - Performance Marketing
-    - Referrals (Product in-app Referrals)
-    - Other Channels (Inside Sales, Reengagement Communication, Social, Blog, Partnerships)
-    """
-    print("Fetching channel breakdown via Metabase native query...")
-
-    sql = f"""
-    SELECT
-      CASE
-        WHEN POWERPLUG_PLAN LIKE 'AFib%' THEN 'AFib'
-        WHEN POWERPLUG_PLAN LIKE 'Cardio%' THEN 'Cardio'
-        WHEN POWERPLUG_PLAN LIKE 'CnO%' THEN 'CnO Pro'
-        WHEN POWERPLUG_PLAN LIKE 'respiratory%' THEN 'Respiratory'
-        WHEN POWERPLUG_PLAN LIKE 'tesla%' THEN 'Tesla'
-        ELSE 'Other'
-      END as PP,
-      CASE
-        WHEN PURCHASE_CHANNEL = 'Product in-app buy buttons' THEN 'In-App'
-        WHEN PURCHASE_CHANNEL = 'others' THEN 'Organic'
-        WHEN PURCHASE_CHANNEL = 'Influencer Marketing' THEN 'Influencer Marketing'
-        WHEN PURCHASE_CHANNEL = 'Performance Marketing' THEN 'Performance Marketing'
-        WHEN PURCHASE_CHANNEL = 'Product in-app Referrals' THEN 'Referrals'
-        ELSE 'Other Channels'
-      END as CHANNEL,
-      ROUND(SUM(AMOUNT_USD), 2) as TOTAL_REV,
-      COUNT(*) as PURCHASES
-    FROM "all_purchase"
-    WHERE PRODUCT_CATEGORY = 'powerplug'
-      AND TO_DATE(PURCHASE_DATE) >= '{DATA_START_DATE}'
-    GROUP BY PP, CHANNEL
-    ORDER BY PP, TOTAL_REV DESC
-    """
-
-    query = {
-        'database': TRIAL_DATABASE_ID,
-        'type': 'native',
-        'native': {
-            'query': sql,
-        },
-    }
-
-    try:
-        result = mb_post('dataset', query)
-        rows = result.get('data', {}).get('rows', [])
-        print(f"  Got {len(rows)} channel rows")
-    except Exception as e:
-        print(f"  WARNING: Failed to fetch channel data: {e}")
-        print("  Using hardcoded channel data fallback...")
-        return _hardcoded_channel_data()
-
-    if not rows:
-        print("  WARNING: No channel rows returned, using hardcoded fallback")
-        return _hardcoded_channel_data()
-
-    # Build nested dict: { PP: { Channel: { revenue, purchases } } }
-    channel_data = {}
-    for row in rows:
-        pp, channel, rev, purchases = row[0], row[1], float(row[2] or 0), int(row[3] or 0)
-        if pp == 'Other':
-            continue
-        if pp not in channel_data:
-            channel_data[pp] = {}
-        channel_data[pp][channel] = {'revenue': round(rev, 2), 'purchases': purchases}
-
-    for pp in PLUGS:
-        if pp in channel_data:
-            pp_total = sum(ch['revenue'] for ch in channel_data[pp].values())
-            print(f"  {pp}: ${pp_total:,.0f} across {len(channel_data[pp])} channels")
-
-    return channel_data
-
-
-def _hardcoded_channel_data():
-    """Fallback hardcoded channel data from Snowflake query (Sep 2025 - Feb 2026)."""
-    return {
-        'AFib': {
-            'In-App': {'revenue': 70507.39, 'purchases': 4064},
-            'Organic': {'revenue': 35449.09, 'purchases': 526},
-            'Influencer Marketing': {'revenue': 10909.72, 'purchases': 140},
-            'Performance Marketing': {'revenue': 10020.68, 'purchases': 124},
-            'Referrals': {'revenue': 1412.94, 'purchases': 17},
-            'Other Channels': {'revenue': 2996.18, 'purchases': 38},
-        },
-        'Cardio': {
-            'In-App': {'revenue': 141196.01, 'purchases': 16434},
-            'Organic': {'revenue': 138610.47, 'purchases': 6321},
-            'Influencer Marketing': {'revenue': 18776.55, 'purchases': 523},
-            'Performance Marketing': {'revenue': 15244.84, 'purchases': 416},
-            'Referrals': {'revenue': 4232.13, 'purchases': 110},
-            'Other Channels': {'revenue': 4982.28, 'purchases': 162},
-        },
-        'CnO Pro': {
-            'In-App': {'revenue': 412197.91, 'purchases': 34154},
-            'Organic': {'revenue': 290054.12, 'purchases': 16959},
-            'Influencer Marketing': {'revenue': 27720.45, 'purchases': 526},
-            'Performance Marketing': {'revenue': 20271.48, 'purchases': 408},
-            'Referrals': {'revenue': 3216.51, 'purchases': 60},
-            'Other Channels': {'revenue': 5164.80, 'purchases': 114},
-        },
-        'Respiratory': {
-            'In-App': {'revenue': 154063.53, 'purchases': 10199},
-            'Organic': {'revenue': 8711.62, 'purchases': 246},
-            'Influencer Marketing': {'revenue': 2622.15, 'purchases': 74},
-            'Performance Marketing': {'revenue': 372.69, 'purchases': 11},
-            'Referrals': {'revenue': 303.74, 'purchases': 8},
-            'Other Channels': {'revenue': 184.50, 'purchases': 6},
-        },
-        'Tesla': {
-            'In-App': {'revenue': 2256.53, 'purchases': 203},
-            'Organic': {'revenue': 1090.20, 'purchases': 77},
-            'Influencer Marketing': {'revenue': 0, 'purchases': 0},
-            'Performance Marketing': {'revenue': 0, 'purchases': 0},
-            'Referrals': {'revenue': 0, 'purchases': 0},
-            'Other Channels': {'revenue': 0, 'purchases': 0},
-        },
-    }
-
-
-# ============================================================
 # FETCH USER OVERLAP DATA (Snowflake all_purchase - deduplicated users)
 # ============================================================
 def fetch_user_overlap():
@@ -749,6 +621,205 @@ def _hardcoded_user_overlap():
 
 
 # ============================================================
+# FETCH CUMULATIVE USERS (Snowflake all_purchase - running total per PP per month)
+# ============================================================
+def fetch_cumulative_users():
+    """
+    Fetches cumulative unique users per PP per month from Snowflake all_purchase table.
+    Uses EMAIL to deduplicate — counts how many unique users have made at least one purchase
+    for a given PP up to and including each month.
+    Also computes a deduplicated total across all PPs per month.
+
+    Returns dict: { "2025-09": { "AFib": 1234, "Cardio": 5678, ..., "_total": 9999 }, ... }
+    """
+    print("Fetching cumulative user data via Metabase native query...")
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    today_month = datetime.now().strftime('%Y-%m')
+
+    sql = f"""
+    WITH months AS (
+      SELECT DISTINCT TO_CHAR(TO_DATE(PURCHASE_DATE), 'YYYY-MM') as mk
+      FROM "all_purchase"
+      WHERE PRODUCT_CATEGORY = 'powerplug'
+        AND TO_DATE(PURCHASE_DATE) >= '{DATA_START_DATE}'
+        AND TO_DATE(PURCHASE_DATE) <= '{today}'
+    ),
+    user_first_pp AS (
+      SELECT
+        EMAIL,
+        CASE
+          WHEN POWERPLUG_PLAN LIKE 'AFib%' THEN 'AFib'
+          WHEN POWERPLUG_PLAN LIKE 'Cardio%' THEN 'Cardio'
+          WHEN POWERPLUG_PLAN LIKE 'CnO%' THEN 'CnO Pro'
+          WHEN POWERPLUG_PLAN LIKE 'respiratory%' THEN 'Respiratory'
+          WHEN POWERPLUG_PLAN LIKE 'tesla%' THEN 'Tesla'
+        END as PP,
+        TO_CHAR(MIN(TO_DATE(PURCHASE_DATE)), 'YYYY-MM') as first_month
+      FROM "all_purchase"
+      WHERE PRODUCT_CATEGORY = 'powerplug'
+        AND TO_DATE(PURCHASE_DATE) >= '{DATA_START_DATE}'
+        AND POWERPLUG_PLAN IS NOT NULL
+      GROUP BY EMAIL, PP
+    ),
+    user_first_any AS (
+      SELECT
+        EMAIL,
+        TO_CHAR(MIN(TO_DATE(PURCHASE_DATE)), 'YYYY-MM') as first_month
+      FROM "all_purchase"
+      WHERE PRODUCT_CATEGORY = 'powerplug'
+        AND TO_DATE(PURCHASE_DATE) >= '{DATA_START_DATE}'
+        AND POWERPLUG_PLAN IS NOT NULL
+      GROUP BY EMAIL
+    ),
+    per_pp AS (
+      SELECT m.mk as month, uf.PP, COUNT(DISTINCT uf.EMAIL) as cumulative_users
+      FROM months m
+      JOIN user_first_pp uf ON uf.first_month <= m.mk
+      WHERE uf.PP IS NOT NULL
+      GROUP BY m.mk, uf.PP
+    ),
+    total_dedup AS (
+      SELECT m.mk as month, COUNT(DISTINCT ufa.EMAIL) as cumulative_users
+      FROM months m
+      JOIN user_first_any ufa ON ufa.first_month <= m.mk
+      GROUP BY m.mk
+    )
+    SELECT 'pp' as qtype, month, PP as key1, cumulative_users as val FROM per_pp
+    UNION ALL
+    SELECT 'total' as qtype, month, '_total' as key1, cumulative_users as val FROM total_dedup
+    ORDER BY month, qtype, key1
+    """
+
+    query = {
+        'database': TRIAL_DATABASE_ID,
+        'type': 'native',
+        'native': {'query': sql},
+    }
+
+    try:
+        result = mb_post('dataset', query)
+        rows = result.get('data', {}).get('rows', [])
+        print(f"  Got {len(rows)} cumulative user rows")
+    except Exception as e:
+        print(f"  WARNING: Failed to fetch cumulative users: {e}")
+        return _hardcoded_cumulative_users()
+
+    if not rows:
+        print("  WARNING: No cumulative user rows, using fallback")
+        return _hardcoded_cumulative_users()
+
+    # Parse: { month: { PP: count, "_total": count } }
+    cumulative = defaultdict(dict)
+    for row in rows:
+        qtype, month, key, val = row[0], row[1], row[2], int(row[3] or 0)
+        cumulative[month][key] = val
+
+    # Print summary
+    for month in sorted(cumulative.keys()):
+        total = cumulative[month].get('_total', 0)
+        pp_parts = ', '.join(f"{p}:{cumulative[month].get(p, 0):,}" for p in PLUGS)
+        print(f"  {month}: total={total:,} ({pp_parts})")
+
+    return dict(cumulative)
+
+
+def _hardcoded_cumulative_users():
+    """Fallback hardcoded cumulative users data."""
+    return {}
+
+
+# ============================================================
+# FETCH PLAN MIX DATA (Monthly / Yearly / 2-Year revenue split)
+# ============================================================
+def fetch_plan_mix():
+    """
+    Fetches plan type revenue breakdown per PP per month via Metabase native SQL.
+    Returns: { "2025-09": { "AFib": { "Monthly": 1234, "Yearly": 5678, "2-Year": 910 }, ... }, ... }
+    """
+    print("Fetching plan mix data via Metabase native query...")
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    sql = f"""
+    SELECT
+      TO_CHAR(TO_DATE(PURCHASE_DATE), 'YYYY-MM') as month,
+      CASE
+        WHEN POWERPLUG_PLAN LIKE 'AFib%' THEN 'AFib'
+        WHEN POWERPLUG_PLAN LIKE 'Cardio%' THEN 'Cardio'
+        WHEN POWERPLUG_PLAN LIKE 'CnO%' THEN 'CnO Pro'
+        WHEN POWERPLUG_PLAN LIKE 'respiratory%' THEN 'Respiratory'
+        WHEN POWERPLUG_PLAN LIKE 'tesla%' THEN 'Tesla'
+        ELSE NULL
+      END as pp,
+      CASE
+        WHEN POWERPLUG_PLAN LIKE '%-monthly' THEN 'Monthly'
+        WHEN POWERPLUG_PLAN LIKE '%-yearly' OR POWERPLUG_PLAN LIKE '%-1 year' THEN 'Yearly'
+        WHEN POWERPLUG_PLAN LIKE '%-2 year%' THEN '2-Year'
+        ELSE 'Other'
+      END as plan_type,
+      ROUND(SUM(AMOUNT_USD), 2) as revenue,
+      COUNT(*) as purchases
+    FROM "all_purchase"
+    WHERE PRODUCT_CATEGORY = 'powerplug'
+      AND TO_DATE(PURCHASE_DATE) >= '{DATA_START_DATE}'
+      AND TO_DATE(PURCHASE_DATE) <= '{today}'
+    GROUP BY 1, 2, 3
+    HAVING pp IS NOT NULL
+    ORDER BY 1, 2, 3
+    """
+
+    try:
+        data = mb_post('dataset', {
+            'database': 2,
+            'type': 'native',
+            'native': {'query': sql},
+        })
+
+        rows = data.get('data', {}).get('rows', [])
+        if not rows:
+            print("  WARNING: No plan mix data returned, using empty dict")
+            return {}
+
+        print(f"  Got {len(rows)} plan mix rows")
+
+        # Build nested structure: month -> pp -> plan_type -> { revenue, purchases }
+        result = {}
+        for row in rows:
+            mk, pp, plan_type, revenue, purchases = row[0], row[1], row[2], float(row[3] or 0), int(row[4] or 0)
+            pp_mapped = PP_MAP.get(pp.lower(), pp) if pp else None
+            if not pp_mapped or pp_mapped not in PLUGS:
+                continue
+            if mk not in result:
+                result[mk] = {}
+            if pp_mapped not in result[mk]:
+                result[mk][pp_mapped] = {}
+            result[mk][pp_mapped][plan_type] = {
+                'revenue': round(revenue, 2),
+                'purchases': purchases,
+            }
+
+        # Print summary
+        for mk in sorted(result.keys()):
+            total = sum(
+                result[mk][pp][pt]['revenue']
+                for pp in result[mk]
+                for pt in result[mk][pp]
+            )
+            plan_totals = {}
+            for pp in result[mk]:
+                for pt in result[mk][pp]:
+                    plan_totals[pt] = plan_totals.get(pt, 0) + result[mk][pp][pt]['revenue']
+            parts = ', '.join(f"{pt}: ${v:,.0f}" for pt, v in sorted(plan_totals.items()))
+            print(f"  {mk}: ${total:,.0f} ({parts})")
+
+        return result
+
+    except Exception as e:
+        print(f"  ERROR fetching plan mix: {e}")
+        return {}
+
+
+# ============================================================
 # FETCH COUNTRY REVENUE (Card 9061 - raw revenue data with COUNTRY)
 # ============================================================
 def fetch_country_revenue():
@@ -797,7 +868,7 @@ def fetch_country_revenue():
                 ],
                 'breakout': [
                     ['field', 'COUNTRY', {'base-type': 'type/Text'}],
-                    ['field', 'PRODUCT_ID', {'base-type': 'type/Text'}],
+                    ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}],
                     ['field', 'PURCHASE_DATE', {'base-type': 'type/DateTimeWithLocalTZ', 'temporal-unit': 'day'}],
                 ],
                 'filter': [
@@ -825,7 +896,7 @@ def fetch_country_revenue():
         print("  WARNING: No country revenue data returned!")
         return {}
 
-    # Rows: [COUNTRY, PRODUCT_ID, PURCHASE_DATE(day), SUM_AMOUNT_USD, COUNT]
+    # Rows: [COUNTRY, POWERPLUG_TYPE, PURCHASE_DATE(day), SUM_AMOUNT_USD, COUNT]
     # Group by country -> month -> date -> PP -> {revenue, subs}
     raw = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {'revenue': 0, 'subs': 0})))
 
@@ -901,7 +972,7 @@ def fetch_country_revenue():
 # ============================================================
 # TEMPLATE INJECTION
 # ============================================================
-def inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, channel_data, user_overlap):
+def inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, user_overlap, cumulative_users, plan_mix):
     """Replace placeholder tokens in the template with real data."""
     print("Injecting data into template...")
 
@@ -913,8 +984,9 @@ def inject_data(template, revenue_data, purchase_data, trial_data, user_data, co
     output = output.replace('/*__TRIAL_DATA__*/{}', json.dumps(trial_data, separators=(',', ':')))
     output = output.replace('/*__USER_DATA__*/{}', json.dumps(user_data, separators=(',', ':')))
     output = output.replace('/*__COUNTRY_REVENUE_DATA__*/{}', json.dumps(country_revenue, separators=(',', ':')))
-    output = output.replace('/*__CHANNEL_DATA__*/{}', json.dumps(channel_data, separators=(',', ':')))
     output = output.replace('/*__USER_OVERLAP__*/{}', json.dumps(user_overlap, separators=(',', ':')))
+    output = output.replace('/*__CUMULATIVE_USERS__*/{}', json.dumps(cumulative_users, separators=(',', ':')))
+    output = output.replace('/*__PLAN_MIX__*/{}', json.dumps(plan_mix, separators=(',', ':')))
     output = output.replace('/*__LAST_UPDATED__*/', now)
 
     # Google Sheets config
@@ -967,11 +1039,12 @@ def main():
 
     purchase_data = build_purchase_data(revenue_data)
     user_data = fetch_user_data()
-    channel_data = fetch_channel_data()
     user_overlap = fetch_user_overlap()
+    cumulative_users = fetch_cumulative_users()
+    plan_mix = fetch_plan_mix()
 
     # Inject into template
-    output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, channel_data, user_overlap)
+    output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, user_overlap, cumulative_users, plan_mix)
 
     # Write output
     OUTPUT_FILE.write_text(output)

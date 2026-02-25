@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Powerplugs Daily Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%237c5cfc'/%3E%3Cstop offset='100%25' stop-color='%23a855f7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='6' fill='url(%23g)'/%3E%3Cpath d='M9 8h6.5a5.5 5.5 0 0 1 0 11H13v5H9V8z' fill='white'/%3E%3Cpath d='M13 12v3h2.5a1.5 1.5 0 0 0 0-3H13z' fill='%237c5cfc'/%3E%3C/svg%3E">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -33,6 +34,8 @@
   .kpi-card { background: linear-gradient(135deg, #16162a 0%, #1c1c32 100%); border: 1px solid #2a2a3e; border-radius: 12px; padding: 18px; }
   .kpi-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #888; margin-bottom: 6px; }
   .kpi-card .value { font-size: 24px; font-weight: 700; color: #fff; }
+  .kpi-card .kpi-sub { font-size: 10px; color: #555; margin-top: 4px; line-height: 1.3; }
+  .kpi-definitions { padding: 0 40px 4px; font-size: 10px; color: #555; line-height: 1.5; }
   .dashboard { padding: 0 40px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .chart-card { background: linear-gradient(135deg, #16162a 0%, #1c1c32 100%); border: 1px solid #2a2a3e; border-radius: 12px; padding: 22px; }
   .chart-card.full-width { grid-column: 1 / -1; }
@@ -130,7 +133,7 @@
   .check-cell.active { color: #22c55e; }
   .check-cell.inactive { color: #333; }
 
-  /* Email Campaigns tab */
+  /* Campaigns tab */
   .email-section { padding: 24px 40px 40px; }
   .email-section h2 { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px; }
   .email-section .subtitle { font-size: 12px; color: #666; margin-bottom: 20px; }
@@ -152,7 +155,10 @@
 <body>
 <div class="header">
   <h1><span>Powerplugs</span> Daily Dashboard</h1>
-  <div class="header-meta">Last updated: <span id="lastUpdated"></span></div>
+  <div class="header-meta" style="display:flex;align-items:center;gap:12px">
+    <span>Last updated: <span id="lastUpdated"></span></span>
+    <button id="refreshBtn" onclick="refreshDashboard()" style="background:rgba(124,92,252,0.15);border:1px solid rgba(124,92,252,0.3);color:#7c5cfc;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.2s" onmouseover="this.style.background='rgba(124,92,252,0.25)'" onmouseout="this.style.background='rgba(124,92,252,0.15)'"><span id="refreshIcon" style="display:inline-block;transition:transform 0.3s">&#x21bb;</span> Refresh</button>
+  </div>
 </div>
 <div class="filter-bar">
   <div class="filter-group">
@@ -198,13 +204,22 @@
     <label>Month</label>
     <select id="filterMonth"></select>
   </div>
+  <div class="filter-group">
+    <label>Start Date</label>
+    <input type="date" id="filterStartDate" min="2025-09-01" style="background:#12121e;border:1px solid #2a2a3e;color:#e0e0e0;padding:6px 10px;border-radius:8px;font-size:13px;outline:none">
+  </div>
+  <div class="filter-group">
+    <label>End Date</label>
+    <input type="date" id="filterEndDate" min="2025-09-01" style="background:#12121e;border:1px solid #2a2a3e;color:#e0e0e0;padding:6px 10px;border-radius:8px;font-size:13px;outline:none">
+  </div>
+  <button id="resetDatesBtn" onclick="resetDateFilters()" style="align-self:flex-end;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.3);color:#f87171;padding:6px 14px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;display:none">&times; Reset dates</button>
 </div>
 
 <!-- Tab Navigation -->
 <div class="tab-bar">
   <button class="tab-btn active" onclick="switchTab('dashboard')">Dashboard</button>
   <button class="tab-btn" onclick="switchTab('countries')">Active Countries</button>
-  <button class="tab-btn" onclick="switchTab('emails')">Email Campaigns</button>
+  <button class="tab-btn" onclick="switchTab('emails')">Campaigns</button>
 </div>
 
 <!-- ============ TAB 1: DASHBOARD ============ -->
@@ -230,16 +245,21 @@
       <div class="chart-container"><canvas id="revenueChart"></canvas></div>
       <div class="pp-legend" id="ppLegend"></div>
     </div>
-    <div class="chart-card full-width">
+    <div class="chart-card" id="trialCard">
       <h2>Trial vs Converted Users</h2>
-      <div class="subtitle">Real trial &amp; conversion data from RevCat for all powerplugs</div>
-      <div class="chart-container"><canvas id="trialChart"></canvas></div>
-      <div id="trialConversionCallouts" style="margin-top:12px"></div>
-      <div style="margin-top:10px;padding:10px 14px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.2);border-radius:8px;font-size:12px;color:#bbb;line-height:1.7">
-        <span style="color:#a855f7;font-weight:600">Free Trial Durations:</span><br/>
-        <span style="color:#fff">C&amp;O Pro/Plus:</span> <span style="color:#7c5cfc;font-weight:600">7-day</span> free trial (monthly plans) &middot; <span style="color:#7c5cfc;font-weight:600">30-day</span> free trial (yearly plans)<br/>
-        <span style="color:#fff">AFib, Cardio, Respiratory, Tesla:</span> <span style="color:#7c5cfc;font-weight:600">3-day</span> free trial (monthly plans) &middot; <span style="color:#7c5cfc;font-weight:600">7-day</span> free trial (yearly plans)
+      <div class="subtitle">Trial &amp; conversion data from RevCat</div>
+      <div class="chart-container" style="height:280px"><canvas id="trialChart"></canvas></div>
+      <div id="trialConversionCallouts" style="margin-top:8px"></div>
+      <div style="margin-top:8px;padding:8px 12px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.2);border-radius:8px;font-size:11px;color:#bbb;line-height:1.6">
+        <span style="color:#a855f7;font-weight:600">Trial Durations:</span><br/>
+        <span style="color:#fff">C&amp;O:</span> <span style="color:#7c5cfc;font-weight:600">7d</span> (mo) / <span style="color:#7c5cfc;font-weight:600">30d</span> (yr) &middot;
+        <span style="color:#fff">Others:</span> <span style="color:#7c5cfc;font-weight:600">3d</span> (mo) / <span style="color:#7c5cfc;font-weight:600">7d</span> (yr)
       </div>
+    </div>
+    <div class="chart-card" id="insightRevCard">
+      <h2>Revenue Insights</h2>
+      <div class="subtitle">Auto-generated from revenue data</div>
+      <div id="insightRevenue"></div>
     </div>
     <div class="chart-card full-width">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
@@ -250,16 +270,18 @@
       <div class="chart-container"><canvas id="purchaseChart"></canvas></div>
     </div>
     <div class="chart-card full-width">
-      <h2>Channel Breakdown</h2>
-      <div class="subtitle">Revenue by purchase channel per powerplug &mdash; In-App (app, RevenueCat) vs Organic (website, Shopify+Stripe) vs Marketing channels</div>
-      <div id="channelBreakdown"></div>
+      <h2>Subscription Plan Mix</h2>
+      <div class="subtitle">Revenue breakdown by Monthly / Yearly / 2-Year plans over time</div>
+      <div style="margin:10px 0 14px;padding:10px 14px;background:rgba(124,92,252,0.06);border:1px solid rgba(124,92,252,0.2);border-radius:8px;font-size:12px;color:#bbb;line-height:1.9">
+        <span style="color:#fff;font-weight:600">Pricing per PP (mode price, minor FX variations):</span><br/>
+        <span style="color:#f59e0b;font-weight:600">Monthly:</span> Cardio ~$3 &middot; CnO Pro ~$4 &middot; Respiratory ~$4 &middot; AFib ~$5&ndash;$7 &middot; Tesla ~$7<br/>
+        <span style="color:#7c5cfc;font-weight:600">Yearly:</span> Cardio ~$24 &middot; CnO Pro ~$40 &middot; Respiratory ~$40 &middot; AFib ~$48&ndash;$64 &middot; Tesla ~$69<br/>
+        <span style="color:#4ade80;font-weight:600">2-Year:</span> Cardio ~$38 &middot; CnO Pro ~$70 &middot; AFib ~$77&ndash;$104
+      </div>
+      <div class="chart-container" style="height:320px"><canvas id="planMixChart"></canvas></div>
+      <div id="planMixTable" style="margin-top:14px"></div>
     </div>
-    <div class="chart-card" id="insightRevCard">
-      <h2>Revenue Insights</h2>
-      <div class="subtitle">Auto-generated from revenue data</div>
-      <div id="insightRevenue"></div>
-    </div>
-    <div class="chart-card" id="insightPPCard">
+    <div class="chart-card full-width" id="insightPPCard">
       <h2>Powerplug & Purchase Insights</h2>
       <div class="subtitle">Breakdown, trends &amp; conversions</div>
       <div id="insightPPPurchase"></div>
@@ -280,7 +302,7 @@
     </div>
     <div class="chart-card full-width">
       <h2>User Growth Over Time</h2>
-      <div class="subtitle">Monthly new trial starts &amp; conversions per powerplug &mdash; helps identify acquisition trends and need for interventions</div>
+      <div class="subtitle">Cumulative total unique users per powerplug over time &mdash; shows how the user base is growing (or declining) each month</div>
       <div class="chart-container" style="height:340px"><canvas id="userGrowthChart"></canvas></div>
       <div id="userGrowthInsights" style="margin-top:12px"></div>
     </div>
@@ -294,9 +316,9 @@
     <div class="disclaimer-item">C&amp;O Pro and C&amp;O Plus are separate products available in different countries. Revenue data is currently combined under C&amp;O Pro/Plus.</div>
     <div class="disclaimer-item">Cardio Adaptability and AFib are the same powerplug &mdash; in some countries one is available and in some the other.</div>
     <div class="disclaimer-item">One user may use multiple powerplugs. Total active users is not a simple sum of per-powerplug counts.</div>
-    <div class="disclaimer-item">Revenue data is sourced from Metabase (card 9061). Channel breakdown sourced from Snowflake <code>all_purchase</code> table (PURCHASE_CHANNEL column). <strong style="color:#7c5cfc">In-App</strong> = app purchase, no marketing touchpoint (RevenueCat). <strong style="color:#22c55e">Organic</strong> = website purchase, no marketing touchpoint (Shopify + Stripe). Other channels = attributed marketing touchpoints.</div>
+    <div class="disclaimer-item">Revenue data is sourced from Metabase (card 9061). User growth data sourced from Snowflake <code>all_purchase</code> table (cumulative unique users by EMAIL).</div>
     <div class="disclaimer-item">Retention Rate = Paid Users / Total Users (trial + paid) <strong style="color:#7c5cfc">for the selected period</strong>. This is an all-time cumulative rate; monthly retention would require cohort analysis. ARPU = Total Revenue / Paid Users for the selected period.</div>
-    <div class="disclaimer-item"><span style="opacity:0.6">\u{1F4A4}</span> in the purchases chart marks weekend days (typically lower volume). Faded bars = weekends.</div>
+    <div class="disclaimer-item"><span style="opacity:0.6">\u{1F4A4}</span> in the revenue and purchases charts marks weekend days. Revenue chart: shaded background + dimmed labels. Purchases chart: faded bars.</div>
   </div>
 </div>
 
@@ -309,18 +331,18 @@
   </div>
 </div>
 
-<!-- ============ TAB 3: EMAIL CAMPAIGNS ============ -->
+<!-- ============ TAB 3: CAMPAIGNS ============ -->
 <div id="tab-emails" class="tab-content">
   <div class="email-section">
     <div class="email-header">
       <div>
-        <h2>Email Campaigns</h2>
-        <div class="subtitle">Track HubSpot powerplug email campaigns and engagement metrics</div>
+        <h2>Campaigns</h2>
+        <div class="subtitle">Track powerplug campaigns and engagement metrics</div>
       </div>
       <div class="email-header-actions">
         <input type="file" id="csvUpload" class="csv-upload" accept=".csv" onchange="importEmailCSV(this)" />
         <button class="btn btn-secondary" onclick="document.getElementById('csvUpload').click()">Import CSV</button>
-        <button class="btn btn-primary" onclick="addEmailCampaign()">+ Add Email Campaign</button>
+        <button class="btn btn-primary" onclick="addEmailCampaign()">+ Add Campaign</button>
       </div>
     </div>
     <div id="emailTracker"></div>
@@ -416,19 +438,20 @@ function getMonthlyTrials(plug, mk) { const d = getTrialDataForMonth(plug, mk); 
 function getMonthlyConverted(plug, mk) { const d = getTrialDataForMonth(plug, mk); return d ? sum(d.converted) : 0; }
 function hasRealTrialData(plug) { return !!TRIAL_DATA[plug]; }
 
-// Channel Breakdown Data (from Snowflake all_purchase table, PURCHASE_CHANNEL column)
-// In-App = app purchase, no marketing touchpoint (RevenueCat)
-// Organic = website purchase, no marketing touchpoint (Shopify + Stripe)
-// Influencer/Performance Marketing, Referrals, Other Channels = attributed marketing touchpoints
-const CHANNEL_DATA = /*__CHANNEL_DATA__*/{};
-
 // User overlap / deduplicated user data (from Snowflake all_purchase, EMAIL-based dedup)
 const USER_OVERLAP = /*__USER_OVERLAP__*/{};
+
+// Cumulative user count per PP per month (from Snowflake, running total of unique users)
+const CUMULATIVE_USERS = /*__CUMULATIVE_USERS__*/{};
+
+// Plan mix data: month -> PP -> plan_type -> { revenue, purchases }
+const PLAN_MIX = /*__PLAN_MIX__*/{};
 
 // ============================================================
 // STATE & INIT
 // ============================================================
 let currentPP = 'All', currentMonth = '2026-02', charts = {};
+let customStartDate = null, customEndDate = null; // Custom date range overrides
 Chart.register(ChartDataLabels);
 Chart.defaults.color = '#666';
 Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
@@ -450,8 +473,39 @@ async function init() {
     sel.appendChild(opt);
   });
   document.getElementById('filterPP').addEventListener('change', e => { currentPP = e.target.value; renderAll(); renderEmailTracker(); });
-  document.getElementById('filterMonth').addEventListener('change', e => { currentMonth = e.target.value; renderAll(); });
+  document.getElementById('filterMonth').addEventListener('change', e => {
+    currentMonth = e.target.value;
+    // When month changes, clear custom dates and auto-fill based on month
+    customStartDate = null; customEndDate = null;
+    document.getElementById('filterStartDate').value = '';
+    document.getElementById('filterEndDate').value = '';
+    document.getElementById('resetDatesBtn').style.display = 'none';
+    renderAll();
+  });
   document.getElementById('filterCountry').addEventListener('change', e => { currentCountry = e.target.value; renderAll(); });
+
+  // Date range filter listeners
+  const startDateEl = document.getElementById('filterStartDate');
+  const endDateEl = document.getElementById('filterEndDate');
+  function onDateChange() {
+    const s = startDateEl.value, e = endDateEl.value;
+    if (s && e && s <= e) {
+      customStartDate = s; customEndDate = e;
+      // Auto-switch month dropdown to all-time if range spans multiple months
+      const startMk = s.slice(0, 7), endMk = e.slice(0, 7);
+      if (startMk !== endMk) {
+        document.getElementById('filterMonth').value = 'all-time';
+        currentMonth = 'all-time';
+      } else {
+        document.getElementById('filterMonth').value = startMk;
+        currentMonth = startMk;
+      }
+      document.getElementById('resetDatesBtn').style.display = '';
+      renderAll();
+    }
+  }
+  startDateEl.addEventListener('change', onDateChange);
+  endDateEl.addEventListener('change', onDateChange);
 
   // Render immediately with localStorage data
   renderAll();
@@ -479,7 +533,7 @@ async function init() {
 }
 
 function renderAll() {
-  renderKPIs(); renderAlerts(); renderUserStats(); renderRevenueChart(); renderPPLegend(); renderTrialChart(); renderPurchaseChart(); renderChannelBreakdown(); renderInsights(); renderProjectionTable(); renderCampaignTracker(); renderUserGrowth(); renderCountryRevenue();
+  renderKPIs(); renderAlerts(); renderUserStats(); renderRevenueChart(); renderPPLegend(); renderTrialChart(); renderPurchaseChart(); renderPlanMix(); renderInsights(); renderProjectionTable(); renderCampaignTracker(); renderUserGrowth(); renderCountryRevenue();
 }
 
 // ============================================================
@@ -492,12 +546,65 @@ function switchTab(tabId) {
   event.target.classList.add('active');
 }
 
+function refreshDashboard() {
+  const btn = document.getElementById('refreshBtn');
+  const icon = document.getElementById('refreshIcon');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  icon.style.animation = 'spin 0.8s linear infinite';
+
+  // Add spin keyframes if not already present
+  if (!document.getElementById('refreshSpinStyle')) {
+    const style = document.createElement('style');
+    style.id = 'refreshSpinStyle';
+    style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+  }
+
+  // Force a hard reload from the server (bypasses cache)
+  setTimeout(() => { window.location.reload(true); }, 300);
+}
+
 // ============================================================
 // HELPERS
 // ============================================================
 function getPlugs() { return currentPP === 'All' ? PLUGS : [currentPP]; }
 function sum(arr) { return arr.reduce((a,b) => a+b, 0); }
 function isAllTime() { return currentMonth === 'all-time'; }
+function hasCustomDates() { return customStartDate && customEndDate; }
+
+// Filter a month's daily data to only include dates within custom range
+// Returns { dates, revenue, subscriptions } with filtered arrays, or null if no overlap
+function filterMonthData(monthData, filterType) {
+  if (!monthData || !hasCustomDates()) return monthData;
+  const start = customStartDate, end = customEndDate;
+  const indices = [];
+  monthData.dates.forEach((d, i) => { if (d >= start && d <= end) indices.push(i); });
+  if (indices.length === 0) return null;
+  const filtered = { dates: indices.map(i => monthData.dates[i]) };
+  if (monthData.revenue) {
+    filtered.revenue = {};
+    for (const p in monthData.revenue) { filtered.revenue[p] = indices.map(i => monthData.revenue[p]?.[i] || 0); }
+  }
+  if (monthData.subscriptions) {
+    filtered.subscriptions = {};
+    for (const p in monthData.subscriptions) { filtered.subscriptions[p] = indices.map(i => monthData.subscriptions[p]?.[i] || 0); }
+  }
+  if (monthData.purchases) {
+    filtered.purchases = {};
+    for (const p in monthData.purchases) { filtered.purchases[p] = indices.map(i => monthData.purchases[p]?.[i] || 0); }
+  }
+  return filtered;
+}
+
+function resetDateFilters() {
+  customStartDate = null; customEndDate = null;
+  document.getElementById('filterStartDate').value = '';
+  document.getElementById('filterEndDate').value = '';
+  document.getElementById('resetDatesBtn').style.display = 'none';
+  renderAll();
+}
 function getActiveCountryName() {
   if (currentCountry === 'All') return null;
   return countryCodeToName(currentCountry);
@@ -505,6 +612,11 @@ function getActiveCountryName() {
 
 function getMonthKeys() {
   const src = getActiveCountryName() ? (COUNTRY_REVENUE_DATA[getActiveCountryName()] || {}) : REVENUE_DATA;
+  if (hasCustomDates()) {
+    // Return all months that overlap with the custom date range
+    const startMk = customStartDate.slice(0, 7), endMk = customEndDate.slice(0, 7);
+    return Object.keys(src).sort().filter(mk => mk >= startMk && mk <= endMk);
+  }
   return isAllTime() ? Object.keys(src).sort() : [currentMonth];
 }
 
@@ -515,21 +627,25 @@ function getMonthDays(mk) {
 
 function getRevForMonth(mk) {
   const cn = getActiveCountryName();
+  let data;
   if (cn) {
-    // Use country-specific daily data
-    return COUNTRY_REVENUE_DATA[cn]?.[mk] || null;
+    data = COUNTRY_REVENUE_DATA[cn]?.[mk] || null;
+  } else {
+    data = REVENUE_DATA[mk] || null;
   }
-  return REVENUE_DATA[mk] || null;
+  return hasCustomDates() ? filterMonthData(data, 'rev') : data;
 }
 function getPurchForMonth(mk) {
   const cn = getActiveCountryName();
+  let data;
   if (cn) {
-    // Country data has subscriptions which = purchases
     const cd = COUNTRY_REVENUE_DATA[cn]?.[mk];
-    if (!cd) return null;
-    return { dates: cd.dates, purchases: cd.subscriptions };
+    if (!cd) data = null;
+    else data = { dates: cd.dates, purchases: cd.subscriptions };
+  } else {
+    data = PURCHASE_DATA[mk] || null;
   }
-  return PURCHASE_DATA[mk] || null;
+  return hasCustomDates() ? filterMonthData(data, 'purch') : data;
 }
 
 function getMonthlyRevenue(plug, mk) {
@@ -654,23 +770,50 @@ function renderKPIs() {
     targetVal = ct > 0 ? '$' + ct.toLocaleString() : 'Not Set';
   }
 
-  // ARPU = Total Revenue / Total Paid Users (across selected PPs)
+  // Total unique paid users (from all_purchase — everyone in this table has purchased)
   const totalPaidUsers = plugs.reduce((s,p) => s + (USER_DATA[p]?.paid || 0), 0);
+
+  // ARPU = Total Revenue / Total Paid Users
   const arpu = totalPaidUsers > 0 ? (totalRev / totalPaidUsers).toFixed(2) : '\u2014';
 
-  // Retention proxy: paid users / total users
-  const totalUsers = plugs.reduce((s,p) => s + (USER_DATA[p]?.users || 0), 0);
-  const retentionRate = totalUsers > 0 ? ((totalPaidUsers / totalUsers) * 100).toFixed(1) + '%' : '\u2014';
+  // Trial → Paid conversion rate (from card 19529: converted / trial users)
+  // Use eligible trials (excluding users whose free trial hasn't ended)
+  const months2 = getMonthKeys();
+  const totalTrials = plugs.reduce((s,p) => s + months2.reduce((s2,mk) => s2 + getMonthlyTrials(p, mk), 0), 0);
+  const totalConverted = plugs.reduce((s,p) => s + months2.reduce((s2,mk) => s2 + getMonthlyConverted(p, mk), 0), 0);
+  const totalStillOnTrial = plugs.reduce((s,p) => s + months2.reduce((s2,mk) => s2 + getStillOnTrial(p, mk), 0), 0);
+  const eligibleTrials = totalTrials - totalStillOnTrial;
+  const convRate = eligibleTrials > 0 ? ((totalConverted / eligibleTrials) * 100).toFixed(1) + '%' : (totalTrials > 0 ? ((totalConverted / totalTrials) * 100).toFixed(1) + '%' : '\u2014');
+  const convSuffix = totalStillOnTrial > 0 ? ` <span style="font-size:10px;color:#fbbf24">(${totalStillOnTrial.toLocaleString()} on trial)</span>` : '';
 
+  const revLabel = hasCustomDates() ? 'Revenue (Custom)' : (isAllTime() ? 'Total Revenue' : 'Revenue (MTD)');
+  const purchLabel = hasCustomDates() ? 'Purchases (Custom)' : (isAllTime() ? 'Total Purchases' : 'Purchases (MTD)');
   const kpis = [
-    { label: isAllTime() ? 'Total Revenue' : 'Revenue (MTD)', value: '$' + Math.round(totalRev).toLocaleString() },
+    { label: revLabel, value: '$' + Math.round(totalRev).toLocaleString() },
     { label: 'Projected Monthly', value: projectedRev },
     { label: 'Plan Target', value: targetVal },
-    { label: 'Total Purchases', value: totalPurch.toLocaleString() },
+    { label: purchLabel, value: totalPurch.toLocaleString() },
     { label: 'ARPU', value: arpu !== '\u2014' ? '$' + arpu : arpu },
-    { label: 'Retention Rate', value: retentionRate },
+    { label: 'Trial \u2192 Paid *', value: convRate, sub: totalStillOnTrial > 0 ? `${totalStillOnTrial.toLocaleString()} still on trial` : '' },
   ];
-  strip.innerHTML = kpis.map(k => `<div class="kpi-card"><div class="label">${k.label}</div><div class="value">${k.value}</div></div>`).join('');
+  strip.innerHTML = kpis.map(k => `<div class="kpi-card"><div class="label">${k.label}</div><div class="value">${k.value}</div>${k.sub ? `<div class="kpi-sub" style="color:#fbbf24">${k.sub}</div>` : ''}</div>`).join('');
+
+  // Render definitions below KPI strip
+  let defEl = document.getElementById('kpiDefinitions');
+  if (!defEl) {
+    defEl = document.createElement('div');
+    defEl.id = 'kpiDefinitions';
+    defEl.className = 'kpi-definitions';
+    strip.parentNode.insertBefore(defEl, strip.nextSibling);
+  }
+  const defs = [];
+  if (hasCustomDates()) {
+    defs.push(`<b style="color:#7c5cfc">\u{1F4C5} Custom range: ${customStartDate} to ${customEndDate}</b> (${getMonthKeys().reduce((s,mk) => { const d = getRevForMonth(mk); return s + (d ? d.dates.length : 0); }, 0)} days)`);
+  }
+  defs.push(`<b>Purchases ${hasCustomDates()?'(Custom)':isAllTime()?'':'(MTD)'}</b> = Total subscription purchases ${hasCustomDates()?'in selected date range':isAllTime()?'across all months':'in the selected month to date'} for selected Powerplugs.`);
+  defs.push(`<b>ARPU</b> = Total Revenue \u00f7 Paid Users (from all_purchase, deduplicated by email).`);
+  defs.push(`<b>* Trial \u2192 Paid</b> = Converted Users \u00f7 Eligible Trial Users (excludes users whose free trial hasn\u2019t ended yet). Trial windows: C&O 7\u201330 days, Others 3\u20137 days. Source: RevCat.`);
+  defEl.innerHTML = defs.join(' &nbsp;\u2022&nbsp; ');
 }
 
 // ============================================================
@@ -682,7 +825,7 @@ function renderAlerts() {
   if (!section || !content) return;
 
   const plugs = getPlugs();
-  const alerts = [];
+  const alerts = []; // Each: { type, text, priority } — lower priority number = more important
 
   // Helper: get previous month key (e.g., '2026-02' -> '2026-01')
   function getPrevMonthKey(mk) {
@@ -692,32 +835,24 @@ function renderAlerts() {
     return `${py}-${String(pm).padStart(2, '0')}`;
   }
 
-  // Helper: get revenue for a specific PP on a specific date index in prev month
-  // dateIdx = 0-based day-of-month index, looks up same day-of-month in prev month
   function getPrevMonthDayRev(p, mk, dayOfMonth) {
     const prevMk = getPrevMonthKey(mk);
     const prevData = getRevForMonth(prevMk);
     if (!prevData || !prevData.dates) return null;
-    // Find the same day-of-month in prev month's dates array
-    const targetDay = String(dayOfMonth).padStart(2, '0');
-    const targetDate = prevMk + '-' + targetDay;
+    const targetDate = prevMk + '-' + String(dayOfMonth).padStart(2, '0');
     const idx = prevData.dates.indexOf(targetDate);
     if (idx < 0) return null;
     return (prevData.revenue[p] || [])[idx] ?? null;
   }
 
-  // Helper: get 3-day avg around same day-of-month in prev month
   function getPrevMonth3DayAvg(p, mk, dayOfMonth) {
     const prevMk = getPrevMonthKey(mk);
     const prevData = getRevForMonth(prevMk);
     if (!prevData || !prevData.dates) return null;
-    // Find the closest day-of-month in prev month
-    const targetDay = String(dayOfMonth).padStart(2, '0');
-    const targetDate = prevMk + '-' + targetDay;
+    const targetDate = prevMk + '-' + String(dayOfMonth).padStart(2, '0');
     const idx = prevData.dates.indexOf(targetDate);
     if (idx < 0) return null;
     const vals = prevData.revenue[p] || [];
-    // 3-day window centered on that day (or shifted if at edge)
     const start = Math.max(0, idx - 1);
     const end = Math.min(vals.length - 1, idx + 1);
     let sum3 = 0, count = 0;
@@ -732,65 +867,71 @@ function renderAlerts() {
       const days = revData.dates.length;
       const lastDate = revData.dates[days - 1];
       const dayOfMonth = parseInt(lastDate.split('-')[2], 10);
+      const totalRev = plugs.reduce((s,p) => s + sum(revData.revenue[p]||[]), 0);
+      const daysInMonth = getMonthDays(mk);
+      const projected = Math.round((totalRev / days) * daysInMonth);
 
-      // Check for big drops/spikes in last day vs 3-day avg
+      // ── PRIORITY 1: Revenue vs plan target (most actionable) ──
+      const target = getCampaignTarget(mk);
+      if (target > 0) {
+        const pace = (projected / target * 100);
+        if (pace < 80) {
+          alerts.push({ type: 'down', priority: 1, text: `Revenue on pace for <span class="down">${pace.toFixed(0)}%</span> of plan target — <span class="down">$${Math.round(target - projected).toLocaleString()} shortfall</span> projected. Needs intervention.` });
+        } else if (pace < 95) {
+          alerts.push({ type: 'down', priority: 3, text: `Revenue slightly behind target: <span class="neutral">${pace.toFixed(0)}%</span> on pace — $${Math.round(target - projected).toLocaleString()} gap to close.` });
+        } else if (pace > 120) {
+          alerts.push({ type: 'up', priority: 5, text: `On pace to <span class="up">exceed target by ${(pace-100).toFixed(0)}%</span> ($${projected.toLocaleString()} projected vs $${target.toLocaleString()} target)` });
+        }
+      }
+
+      // ── PRIORITY 2: Unusual revenue drops (not seasonal) — need action ──
       plugs.forEach(p => {
         const vals = revData.revenue[p] || [];
         if (vals.length < 3) return;
         const last = vals[days-1], prev = vals[days-2], prevPrev = vals[days-3];
         const avg3 = (prev + prevPrev + (vals[days-4]||prev)) / 3;
+        if (avg3 < 50) return; // skip noise from tiny PPs
 
-        // Spike: last day > 2x 3-day avg
-        if (last > avg3 * 2 && last > 100) {
-          // Check if same day last month also spiked
+        // Unusual drop (not seasonal)
+        if (last < avg3 * 0.5) {
           const prevMonthVal = getPrevMonthDayRev(p, mk, dayOfMonth);
           const prevMonthAvg = getPrevMonth3DayAvg(p, mk, dayOfMonth);
-          let seasonalNote = '';
-          if (prevMonthVal !== null && prevMonthAvg !== null && prevMonthAvg > 0) {
-            const prevRatio = prevMonthVal / prevMonthAvg;
-            if (prevRatio > 1.5) {
-              seasonalNote = ` <span style="color:#888;font-size:11px">(consistent — same day last month was also ${(prevRatio*100-100).toFixed(0)}% above avg)</span>`;
-            }
-          }
-          alerts.push({ type: 'up', text: `<span class="val">${displayName(p)}</span> spiked to <span class="up">$${Math.round(last).toLocaleString()}</span> yesterday (${(last/avg3*100-100).toFixed(0)}% above 3-day avg)${seasonalNote}` });
-        }
-
-        // Drop: last day < 50% of 3-day avg
-        if (last < avg3 * 0.5 && avg3 > 100) {
-          // Check if same day last month also had a dip
-          const prevMonthVal = getPrevMonthDayRev(p, mk, dayOfMonth);
-          const prevMonthAvg = getPrevMonth3DayAvg(p, mk, dayOfMonth);
+          let isSeasonal = false;
           let seasonalNote = '';
           if (prevMonthVal !== null && prevMonthAvg !== null && prevMonthAvg > 0) {
             const prevRatio = prevMonthVal / prevMonthAvg;
             if (prevRatio < 0.7) {
-              // Last month same day was also below avg — likely seasonal
-              seasonalNote = ` <span style="color:#888;font-size:11px">(likely seasonal — same day last month was also ${(100-prevRatio*100).toFixed(0)}% below avg)</span>`;
+              isSeasonal = true;
+              seasonalNote = ` <span style="color:#888;font-size:11px">(likely seasonal — last month same pattern)</span>`;
             } else {
-              // Last month same day was normal — this drop is unusual
-              seasonalNote = ` <span style="color:#f59e0b;font-size:11px;font-weight:600">(unusual — same day last month was at $${Math.round(prevMonthVal).toLocaleString()}, which was normal)</span>`;
+              seasonalNote = ` <span style="color:#f59e0b;font-size:11px;font-weight:600">(unusual — last month was normal on this day)</span>`;
             }
           }
-          alerts.push({ type: 'down', text: `<span class="val">${displayName(p)}</span> dropped to <span class="down">$${Math.round(last).toLocaleString()}</span> yesterday (${(100-last/avg3*100).toFixed(0)}% below 3-day avg)${seasonalNote}` });
+          // Unusual drops = priority 2, seasonal drops = priority 7 (low)
+          alerts.push({
+            type: 'down',
+            priority: isSeasonal ? 7 : 2,
+            text: `<span class="val">${displayName(p)}</span> dropped to <span class="down">$${Math.round(last).toLocaleString()}</span> yesterday (${(100-last/avg3*100).toFixed(0)}% below 3-day avg)${seasonalNote}`
+          });
+        }
+
+        // Spike
+        if (last > avg3 * 2 && last > 100) {
+          const prevMonthVal = getPrevMonthDayRev(p, mk, dayOfMonth);
+          const prevMonthAvg = getPrevMonth3DayAvg(p, mk, dayOfMonth);
+          let seasonalNote = '';
+          if (prevMonthVal !== null && prevMonthAvg !== null && prevMonthAvg > 0) {
+            const prevRatio = prevMonthVal / prevMonthAvg;
+            if (prevRatio > 1.5) seasonalNote = ` <span style="color:#888;font-size:11px">(consistent — same pattern last month)</span>`;
+          }
+          alerts.push({ type: 'up', priority: 6, text: `<span class="val">${displayName(p)}</span> spiked to <span class="up">$${Math.round(last).toLocaleString()}</span> yesterday (${(last/avg3*100-100).toFixed(0)}% above 3-day avg)${seasonalNote}` });
         }
       });
 
-      // Check total revenue pace vs target
-      const totalRev = plugs.reduce((s,p) => s + sum(revData.revenue[p]||[]), 0);
-      const daysInMonth = getMonthDays(mk);
-      const projected = Math.round((totalRev / days) * daysInMonth);
-      const target = getCampaignTarget(mk);
-      if (target > 0) {
-        const pace = (projected / target * 100).toFixed(0);
-        if (pace < 80) alerts.push({ type: 'down', text: `Revenue on pace for <span class="down">${pace}%</span> of plan target &mdash; $${Math.round(target - projected).toLocaleString()} shortfall projected` });
-        else if (pace > 120) alerts.push({ type: 'up', text: `Revenue on pace to <span class="up">exceed target by ${(pace-100)}%</span> ($${projected.toLocaleString()} projected vs $${target.toLocaleString()} target)` });
-      }
-
-      // MoM total revenue comparison at same point in month
+      // ── PRIORITY 3: MoM pace — context for overall health ──
       const prevMk = getPrevMonthKey(mk);
       const prevRevData = getRevForMonth(prevMk);
       if (prevRevData && prevRevData.dates.length > 0) {
-        // Sum prev month's revenue up to the same day count
         const prevDaysToCompare = Math.min(days, prevRevData.dates.length);
         const prevTotalAtSamePoint = plugs.reduce((s,p) => {
           const pv = prevRevData.revenue[p] || [];
@@ -799,16 +940,15 @@ function renderAlerts() {
         if (prevTotalAtSamePoint > 0) {
           const momPace = ((totalRev - prevTotalAtSamePoint) / prevTotalAtSamePoint * 100);
           const prevMonthName = new Date(parseInt(prevMk.split('-')[0]), parseInt(prevMk.split('-')[1]) - 1).toLocaleDateString('en-US', { month: 'short' });
-          if (Math.abs(momPace) > 5) {
-            const type = momPace > 0 ? 'up' : 'down';
-            const cls = momPace > 0 ? 'up' : 'down';
-            const sign = momPace > 0 ? '+' : '';
-            alerts.push({ type, text: `At day ${days}: <span class="${cls}">${sign}${momPace.toFixed(1)}% vs ${prevMonthName}</span> at same point ($${Math.round(totalRev).toLocaleString()} vs $${Math.round(prevTotalAtSamePoint).toLocaleString()})` });
+          if (momPace < -10) {
+            alerts.push({ type: 'down', priority: 3, text: `Day ${days}: <span class="down">${momPace.toFixed(1)}% behind ${prevMonthName}</span> at same point ($${Math.round(totalRev).toLocaleString()} vs $${Math.round(prevTotalAtSamePoint).toLocaleString()})` });
+          } else if (momPace > 15) {
+            alerts.push({ type: 'up', priority: 4, text: `Day ${days}: <span class="up">+${momPace.toFixed(1)}% ahead of ${prevMonthName}</span> at same point ($${Math.round(totalRev).toLocaleString()} vs $${Math.round(prevTotalAtSamePoint).toLocaleString()})` });
           }
         }
       }
 
-      // All-time high check for any PP
+      // ── PRIORITY 4: All-time high — celebrate wins ──
       const allMonths = Object.keys(REVENUE_DATA).sort();
       plugs.forEach(p => {
         const currentMtd = sum(revData.revenue[p]||[]);
@@ -817,30 +957,54 @@ function renderAlerts() {
           return mdata ? Math.max(max, sum(mdata.revenue[p]||[])) : max;
         }, 0);
         if (currentMtd > best && best > 0 && days >= 15) {
-          alerts.push({ type: 'up', text: `<span class="val">${displayName(p)}</span> already at <span class="up">all-time high</span> ($${Math.round(currentMtd).toLocaleString()}) with ${daysInMonth - days} days remaining` });
+          alerts.push({ type: 'up', priority: 4, text: `<span class="val">${displayName(p)}</span> at <span class="up">all-time high</span> ($${Math.round(currentMtd).toLocaleString()}) with ${daysInMonth - days} days left` });
         }
       });
+
+      // ── PRIORITY 5: User growth anomalies from cumulative data ──
+      if (CUMULATIVE_USERS && Object.keys(CUMULATIVE_USERS).length >= 2) {
+        const cuMonths = Object.keys(CUMULATIVE_USERS).sort();
+        const latestM = cuMonths[cuMonths.length - 1];
+        const prevM = cuMonths[cuMonths.length - 2];
+        plugs.forEach(p => {
+          const cur = CUMULATIVE_USERS[latestM]?.[p] || 0;
+          const prv = CUMULATIVE_USERS[prevM]?.[p] || 0;
+          if (prv > 0) {
+            const growth = ((cur - prv) / prv * 100);
+            if (growth > 40) {
+              alerts.push({ type: 'up', priority: 5, text: `<span class="val">${displayName(p)}</span> user base surging: <span class="up">+${growth.toFixed(0)}% MoM</span> (${prv.toLocaleString()} → ${cur.toLocaleString()})` });
+            } else if (growth < 5 && cur > 500) {
+              alerts.push({ type: 'down', priority: 5, text: `<span class="val">${displayName(p)}</span> user growth stalling: <span class="neutral">+${growth.toFixed(1)}% MoM</span> — may need acquisition push` });
+            }
+          }
+        });
+      }
     }
   } else {
-    // All-time view: identify fastest growing PP
+    // ── ALL-TIME VIEW ──
     const allMonths = getMonthKeys();
     if (allMonths.length >= 2) {
       const lastMk = allMonths[allMonths.length-1], prevMk = allMonths[allMonths.length-2];
-      let bestGrowth = -Infinity, bestPP = '';
+
+      // Total revenue trend
+      const curTotal = plugs.reduce((s,p) => s + getMonthlyRevenue(p, lastMk), 0);
+      const prvTotal = plugs.reduce((s,p) => s + getMonthlyRevenue(p, prevMk), 0);
+      if (prvTotal > 0) {
+        const totalGrowth = ((curTotal - prvTotal) / prvTotal * 100);
+        if (totalGrowth > 10) alerts.push({ type: 'up', priority: 2, text: `Total revenue <span class="up">+${totalGrowth.toFixed(0)}% MoM</span> ($${Math.round(prvTotal).toLocaleString()} → $${Math.round(curTotal).toLocaleString()})` });
+        else if (totalGrowth < -10) alerts.push({ type: 'down', priority: 1, text: `Total revenue <span class="down">${totalGrowth.toFixed(0)}% MoM</span> ($${Math.round(prvTotal).toLocaleString()} → $${Math.round(curTotal).toLocaleString()})` });
+      }
+
+      // Fastest growing PP
+      let bestGrowth = -Infinity, bestPP = '', worstGrowth = Infinity, worstPP = '';
       plugs.forEach(p => {
         const cur = getMonthlyRevenue(p, lastMk), prv = getMonthlyRevenue(p, prevMk);
         const growth = prv > 0 ? ((cur-prv)/prv*100) : 0;
         if (growth > bestGrowth) { bestGrowth = growth; bestPP = p; }
-      });
-      if (bestGrowth > 10) alerts.push({ type: 'up', text: `Fastest growing: <span class="val">${displayName(bestPP)}</span> <span class="up">+${bestGrowth.toFixed(0)}% MoM</span>` });
-      // Biggest decliner
-      let worstGrowth = Infinity, worstPP = '';
-      plugs.forEach(p => {
-        const cur = getMonthlyRevenue(p, lastMk), prv = getMonthlyRevenue(p, prevMk);
-        const growth = prv > 0 ? ((cur-prv)/prv*100) : 0;
         if (growth < worstGrowth) { worstGrowth = growth; worstPP = p; }
       });
-      if (worstGrowth < -10) alerts.push({ type: 'down', text: `Declining: <span class="val">${displayName(worstPP)}</span> <span class="down">${worstGrowth.toFixed(0)}% MoM</span>` });
+      if (bestGrowth > 10) alerts.push({ type: 'up', priority: 3, text: `Fastest growing: <span class="val">${displayName(bestPP)}</span> <span class="up">+${bestGrowth.toFixed(0)}% MoM</span>` });
+      if (worstGrowth < -10) alerts.push({ type: 'down', priority: 2, text: `Needs attention: <span class="val">${displayName(worstPP)}</span> <span class="down">${worstGrowth.toFixed(0)}% MoM</span> — investigate cause` });
     }
   }
 
@@ -849,10 +1013,25 @@ function renderAlerts() {
     return;
   }
 
+  // Sort by priority (lower = more important), show top 5
+  alerts.sort((a, b) => a.priority - b.priority);
+  const topAlerts = alerts.slice(0, 5);
+
   section.style.display = 'block';
   const icons = { up: '\u{1F525}', down: '\u26A0\uFE0F', info: '\u{1F4CA}' };
-  content.innerHTML = `<div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:8px">\u{1F514} Alerts & Highlights</div>` +
-    alerts.map(a => `<div class="insight-item" style="padding:3px 0">${icons[a.type] || icons.info} ${a.text}</div>`).join('');
+  let html = `<div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:8px">\u{1F514} Key Alerts</div>`;
+  html += topAlerts.map(a => `<div class="insight-item" style="padding:3px 0">${icons[a.type] || icons.info} ${a.text}</div>`).join('');
+
+  // If there are more alerts, show them collapsed
+  if (alerts.length > 5) {
+    const rest = alerts.slice(5);
+    html += `<div id="moreAlertsToggle" style="margin-top:6px"><button onclick="document.getElementById('moreAlerts').style.display='block';this.style.display='none'" style="background:none;border:none;color:#7c5cfc;font-size:12px;cursor:pointer;padding:0;font-weight:600">+ ${rest.length} more alerts</button></div>`;
+    html += `<div id="moreAlerts" style="display:none;margin-top:4px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05)">`;
+    html += rest.map(a => `<div class="insight-item" style="padding:2px 0;opacity:0.7">${icons[a.type] || icons.info} ${a.text}</div>`).join('');
+    html += `</div>`;
+  }
+
+  content.innerHTML = html;
 }
 
 // ============================================================
@@ -993,17 +1172,6 @@ function renderUserGrowth() {
   if (charts.userGrowth) { charts.userGrowth.destroy(); charts.userGrowth = null; }
 
   const plugs = getPlugs();
-  // Always show all months for trend visibility
-  const allMonths = Object.keys(REVENUE_DATA).sort();
-  if (allMonths.length < 2) {
-    if (insightsEl) insightsEl.innerHTML = '<div style="color:#555;font-size:13px">Need at least 2 months of data for trend analysis.</div>';
-    return;
-  }
-
-  const monthLabels = allMonths.map(mk => {
-    const [y, m] = mk.split('-');
-    return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-  });
 
   const COLORS = {
     'AFib': { border: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
@@ -1013,129 +1181,213 @@ function renderUserGrowth() {
     'Tesla': { border: '#eab308', bg: 'rgba(234,179,8,0.15)' },
   };
 
-  // Datasets: for each PP, a line showing monthly new trial starts
-  const datasets = [];
-  const ppTrends = {}; // for insights
+  // Use CUMULATIVE_USERS data if available, otherwise fallback to trial/revenue data
+  const hasCumulativeData = CUMULATIVE_USERS && Object.keys(CUMULATIVE_USERS).length > 0;
 
-  plugs.forEach(p => {
-    const trialValues = allMonths.map(mk => hasRealTrialData(p) ? getMonthlyTrials(p, mk) : getMonthlySubs(p, mk));
-    const convValues = allMonths.map(mk => hasRealTrialData(p) ? getMonthlyConverted(p, mk) : getMonthlyPurchases(p, mk));
+  if (hasCumulativeData) {
+    // --- Cumulative total users from Snowflake ---
+    const allMonths = Object.keys(CUMULATIVE_USERS).sort();
+    if (allMonths.length < 2) {
+      if (insightsEl) insightsEl.innerHTML = '<div style="color:#555;font-size:13px">Need at least 2 months of data for trend analysis.</div>';
+      return;
+    }
 
-    // Trial starts line (solid)
-    datasets.push({
-      label: p + ' New Users',
-      data: trialValues,
-      borderColor: COLORS[p]?.border || '#888',
-      backgroundColor: COLORS[p]?.bg || 'rgba(136,136,136,0.15)',
-      borderWidth: 2.5,
-      pointRadius: 4,
-      pointBackgroundColor: COLORS[p]?.border || '#888',
-      fill: false,
-      tension: 0.3,
+    const monthLabels = allMonths.map(mk => {
+      const [y, m] = mk.split('-');
+      return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     });
 
-    // Conversions line (dashed)
-    datasets.push({
-      label: p + ' Converted',
-      data: convValues,
-      borderColor: COLORS[p]?.border || '#888',
-      backgroundColor: 'transparent',
-      borderWidth: 1.5,
-      borderDash: [6, 3],
-      pointRadius: 3,
-      pointStyle: 'triangle',
-      pointBackgroundColor: COLORS[p]?.border || '#888',
-      fill: false,
-      tension: 0.3,
+    const datasets = [];
+    const ppTrends = {};
+
+    plugs.forEach(p => {
+      const values = allMonths.map(mk => CUMULATIVE_USERS[mk]?.[p] || 0);
+
+      datasets.push({
+        label: p + ' Total Users',
+        data: values,
+        borderColor: COLORS[p]?.border || '#888',
+        backgroundColor: COLORS[p]?.bg || 'rgba(136,136,136,0.15)',
+        borderWidth: 2.5,
+        pointRadius: 4,
+        pointBackgroundColor: COLORS[p]?.border || '#888',
+        fill: false,
+        tension: 0.3,
+      });
+
+      // Compute trends
+      const latest = values[values.length - 1];
+      const prev = values.length >= 2 ? values[values.length - 2] : 0;
+      const momChange = prev > 0 ? ((latest - prev) / prev * 100) : 0;
+      const newUsersThisMonth = latest - prev;
+      ppTrends[p] = { latest, prev, momChange, newUsersThisMonth, values };
     });
 
-    // Compute trends
-    const lastTrial = trialValues[trialValues.length - 1];
-    const prevTrial = trialValues.length >= 2 ? trialValues[trialValues.length - 2] : 0;
-    const momChange = prevTrial > 0 ? ((lastTrial - prevTrial) / prevTrial * 100) : 0;
-    const lastConv = convValues[convValues.length - 1];
-    const convRate = lastTrial > 0 ? (lastConv / lastTrial * 100) : 0;
-    ppTrends[p] = { lastTrial, prevTrial, momChange, lastConv, convRate, trialValues, convValues };
-  });
+    // Also add a "Total (all PPs)" dashed line showing deduplicated total
+    const totalValues = allMonths.map(mk => CUMULATIVE_USERS[mk]?.['_total'] || 0);
+    if (totalValues.some(v => v > 0)) {
+      datasets.push({
+        label: 'Total (deduplicated)',
+        data: totalValues,
+        borderColor: '#7c5cfc',
+        backgroundColor: 'rgba(124,92,252,0.1)',
+        borderWidth: 3,
+        borderDash: [8, 4],
+        pointRadius: 5,
+        pointStyle: 'rectRounded',
+        pointBackgroundColor: '#7c5cfc',
+        fill: false,
+        tension: 0.3,
+      });
+    }
 
-  charts.userGrowth = new Chart(canvas.getContext('2d'), {
-    type: 'line',
-    data: { labels: monthLabels, datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: true, position: 'top', labels: { color: '#aaa', font: { size: 11 }, boxWidth: 16, padding: 12 } },
-        datalabels: { display: false },
-        tooltip: {
-          backgroundColor: 'rgba(10,10,20,0.95)', titleColor: '#fff', bodyColor: '#ccc', borderColor: '#2a2a3e', borderWidth: 1,
-          callbacks: {
-            label: function(ctx) {
-              return ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString();
+    charts.userGrowth = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: { labels: monthLabels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: true, position: 'top', labels: { color: '#aaa', font: { size: 11 }, boxWidth: 16, padding: 12 } },
+          datalabels: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(10,10,20,0.95)', titleColor: '#fff', bodyColor: '#ccc', borderColor: '#2a2a3e', borderWidth: 1,
+            callbacks: {
+              label: function(ctx) {
+                return ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString();
+              }
             }
           }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#666', font: { size: 11 } } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#666', font: { size: 11 }, callback: v => v >= 1000 ? (v/1000).toFixed(1)+'K' : v } },
         }
-      },
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#666', font: { size: 11 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#666', font: { size: 11 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v } },
       }
+    });
+
+    // Insights
+    if (!insightsEl) return;
+    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">';
+
+    plugs.forEach(p => {
+      const t = ppTrends[p];
+      if (!t) return;
+      const color = COLORS[p]?.border || '#888';
+      const arrow = t.momChange > 0 ? '↑' : t.momChange < 0 ? '↓' : '→';
+      const changeClass = t.momChange > 2 ? 'up' : t.momChange < -2 ? 'down' : 'neutral';
+      const latestMonth = allMonths[allMonths.length - 1];
+      const [ly, lm] = latestMonth.split('-');
+      const latestLabel = new Date(ly, lm - 1).toLocaleDateString('en-US', { month: 'short' });
+
+      html += `<div style="background:#12121e;border:1px solid #1e1e30;border-radius:8px;padding:12px">`;
+      html += `<div style="font-size:12px;font-weight:600;color:${color};margin-bottom:6px">${displayName(p)}</div>`;
+      html += `<div style="font-size:11px;color:#aaa;line-height:1.7">`;
+      html += `Total users (${latestLabel}): <span class="val">${t.latest.toLocaleString()}</span><br>`;
+      html += `New this month: <span class="val">+${t.newUsersThisMonth.toLocaleString()}</span><br>`;
+      html += `MoM growth: <span class="${changeClass}">${arrow} ${Math.abs(t.momChange).toFixed(1)}%</span>`;
+
+      if (t.momChange < -5) {
+        html += `<br><span style="color:#ef4444;font-size:10px;font-weight:600">⚠ User base shrinking — check churn</span>`;
+      } else if (t.newUsersThisMonth > t.prev * 0.15) {
+        html += `<br><span style="color:#22c55e;font-size:10px;font-weight:600">🚀 Strong growth momentum</span>`;
+      }
+
+      html += `</div></div>`;
+    });
+    html += '</div>';
+
+    // Overall summary
+    const latestTotal = totalValues[totalValues.length - 1];
+    const prevTotal = totalValues.length >= 2 ? totalValues[totalValues.length - 2] : 0;
+    const overallMom = prevTotal > 0 ? ((latestTotal - prevTotal) / prevTotal * 100) : 0;
+    const overallClass = overallMom > 2 ? 'up' : overallMom < -2 ? 'down' : 'neutral';
+    const overallArrow = overallMom > 0 ? '↑' : overallMom < 0 ? '↓' : '→';
+    const newThisMonth = latestTotal - prevTotal;
+
+    html += `<div style="margin-top:10px;padding:10px 14px;background:rgba(124,92,252,0.06);border:1px solid rgba(124,92,252,0.2);border-radius:8px;font-size:12px;color:#bbb;line-height:1.7">`;
+    html += `<span style="color:#7c5cfc;font-weight:600">Total User Base:</span> `;
+    html += `<span class="val">${latestTotal.toLocaleString()}</span> unique users `;
+    html += `(<span class="${overallClass}">${overallArrow} ${Math.abs(overallMom).toFixed(1)}% MoM, +${newThisMonth.toLocaleString()} new</span>). `;
+    html += `Lines show cumulative unique users (deduplicated by email). Dashed purple = total across all PPs.`;
+    html += `</div>`;
+
+    insightsEl.innerHTML = html;
+
+  } else {
+    // --- Fallback: show new users + converted from trial/revenue data ---
+    const allMonths = Object.keys(REVENUE_DATA).sort();
+    if (allMonths.length < 2) {
+      if (insightsEl) insightsEl.innerHTML = '<div style="color:#555;font-size:13px">Need at least 2 months of data for trend analysis.</div>';
+      return;
     }
-  });
 
-  // Insights below chart
-  if (!insightsEl) return;
-  let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">';
+    const monthLabels = allMonths.map(mk => {
+      const [y, m] = mk.split('-');
+      return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    });
 
-  plugs.forEach(p => {
-    const t = ppTrends[p];
-    if (!t) return;
-    const color = COLORS[p]?.border || '#888';
-    const arrow = t.momChange > 0 ? '↑' : t.momChange < 0 ? '↓' : '→';
-    const changeClass = t.momChange > 5 ? 'up' : t.momChange < -5 ? 'down' : 'neutral';
-    const latestMonth = allMonths[allMonths.length - 1];
-    const [ly, lm] = latestMonth.split('-');
-    const latestLabel = new Date(ly, lm - 1).toLocaleDateString('en-US', { month: 'short' });
+    const datasets = [];
+    const ppTrends = {};
 
-    html += `<div style="background:#12121e;border:1px solid #1e1e30;border-radius:8px;padding:12px">`;
-    html += `<div style="font-size:12px;font-weight:600;color:${color};margin-bottom:6px">${displayName(p)}</div>`;
-    html += `<div style="font-size:11px;color:#aaa;line-height:1.7">`;
-    html += `${latestLabel} new users: <span class="val">${t.lastTrial.toLocaleString()}</span><br>`;
-    html += `MoM: <span class="${changeClass}">${arrow} ${Math.abs(t.momChange).toFixed(1)}%</span><br>`;
-    html += `Conv rate: <span class="val">${t.convRate.toFixed(1)}%</span>`;
+    plugs.forEach(p => {
+      const trialValues = allMonths.map(mk => hasRealTrialData(p) ? getMonthlyTrials(p, mk) : getMonthlySubs(p, mk));
+      const convValues = allMonths.map(mk => hasRealTrialData(p) ? getMonthlyConverted(p, mk) : getMonthlyPurchases(p, mk));
 
-    // Flag potential concerns
-    if (t.momChange < -15) {
-      html += `<br><span style="color:#ef4444;font-size:10px;font-weight:600">⚠ Significant decline — intervention recommended</span>`;
-    } else if (t.momChange > 30) {
-      html += `<br><span style="color:#22c55e;font-size:10px;font-weight:600">🚀 Strong growth momentum</span>`;
+      datasets.push({
+        label: p + ' New Users',
+        data: trialValues,
+        borderColor: COLORS[p]?.border || '#888',
+        backgroundColor: COLORS[p]?.bg || 'rgba(136,136,136,0.15)',
+        borderWidth: 2.5,
+        pointRadius: 4,
+        pointBackgroundColor: COLORS[p]?.border || '#888',
+        fill: false,
+        tension: 0.3,
+      });
+
+      datasets.push({
+        label: p + ' Converted',
+        data: convValues,
+        borderColor: COLORS[p]?.border || '#888',
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderDash: [6, 3],
+        pointRadius: 3,
+        pointStyle: 'triangle',
+        pointBackgroundColor: COLORS[p]?.border || '#888',
+        fill: false,
+        tension: 0.3,
+      });
+
+      const lastTrial = trialValues[trialValues.length - 1];
+      const prevTrial = trialValues.length >= 2 ? trialValues[trialValues.length - 2] : 0;
+      const momChange = prevTrial > 0 ? ((lastTrial - prevTrial) / prevTrial * 100) : 0;
+      ppTrends[p] = { lastTrial, prevTrial, momChange, trialValues };
+    });
+
+    charts.userGrowth = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: { labels: monthLabels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: true, position: 'top', labels: { color: '#aaa', font: { size: 11 }, boxWidth: 16, padding: 12 } },
+          datalabels: { display: false },
+          tooltip: { backgroundColor: 'rgba(10,10,20,0.95)', titleColor: '#fff', bodyColor: '#ccc', borderColor: '#2a2a3e', borderWidth: 1 }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#666', font: { size: 11 } } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#666', font: { size: 11 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v } },
+        }
+      }
+    });
+
+    if (insightsEl) {
+      insightsEl.innerHTML = '<div style="padding:8px 14px;background:rgba(124,92,252,0.06);border:1px solid rgba(124,92,252,0.2);border-radius:8px;font-size:12px;color:#bbb">Showing monthly new users (fallback). Cumulative user data not yet available.</div>';
     }
-    if (t.convRate < 30 && t.lastTrial > 100) {
-      html += `<br><span style="color:#f59e0b;font-size:10px;font-weight:600">⚡ Low conversion — check onboarding</span>`;
-    }
-
-    html += `</div></div>`;
-  });
-  html += '</div>';
-
-  // Overall trend summary
-  const totalByMonth = allMonths.map((mk, i) =>
-    plugs.reduce((s, p) => s + (ppTrends[p]?.trialValues[i] || 0), 0)
-  );
-  const latestTotal = totalByMonth[totalByMonth.length - 1];
-  const prevTotal = totalByMonth.length >= 2 ? totalByMonth[totalByMonth.length - 2] : 0;
-  const overallMom = prevTotal > 0 ? ((latestTotal - prevTotal) / prevTotal * 100) : 0;
-  const overallClass = overallMom > 5 ? 'up' : overallMom < -5 ? 'down' : 'neutral';
-  const overallArrow = overallMom > 0 ? '↑' : overallMom < 0 ? '↓' : '→';
-
-  html += `<div style="margin-top:10px;padding:10px 14px;background:rgba(124,92,252,0.06);border:1px solid rgba(124,92,252,0.2);border-radius:8px;font-size:12px;color:#bbb;line-height:1.7">`;
-  html += `<span style="color:#7c5cfc;font-weight:600">Overall User Acquisition:</span> `;
-  html += `${latestTotal.toLocaleString()} new users this month `;
-  html += `(<span class="${overallClass}">${overallArrow} ${Math.abs(overallMom).toFixed(1)}% MoM</span>). `;
-  html += `Solid lines = new trial starts, dashed lines = conversions to paid.`;
-  html += `</div>`;
-
-  insightsEl.innerHTML = html;
+  }
 }
 
 // ============================================================
@@ -1346,6 +1598,9 @@ function renderRevenueChart() {
   const [y,m] = mk.split('-').map(Number);
   for (let d=1; d<=daysInMonth; d++) allDates.push(`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
 
+  // Weekend detection for background shading
+  const weekendIndices = allDates.map((d, i) => { const dt = new Date(d + 'T00:00:00'); const day = dt.getDay(); return (day === 0 || day === 6) ? i : -1; }).filter(i => i >= 0);
+
   const actualValues = [];
   for (let i=0; i<actualDays; i++) { let s=0; plugs.forEach(p => s += (revData.revenue[p]?.[i]||0)); actualValues.push(Math.round(s)); }
   const dailyAvg = sum(actualValues) / actualDays;
@@ -1376,13 +1631,69 @@ function renderRevenueChart() {
     });
   }
 
-  charts.revenue = new Chart(ctx, { type: 'line', data: { labels: allDates.map(d => d.slice(5)), datasets }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y != null ? `${c.dataset.label}: $${c.parsed.y.toLocaleString()}` : '' } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => '$'+v.toLocaleString() } } } } });
+  // Weekend shading plugin
+  const weekendPlugin = {
+    id: 'weekendShading',
+    beforeDraw(chart) {
+      const { ctx, chartArea: {top, bottom}, scales: {x} } = chart;
+      ctx.save();
+      weekendIndices.forEach(idx => {
+        const xPos = x.getPixelForValue(idx);
+        const halfBar = (x.getPixelForValue(1) - x.getPixelForValue(0)) / 2;
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(xPos - halfBar, top, halfBar * 2, bottom - top);
+      });
+      ctx.restore();
+    }
+  };
+
+  // Add 💤 to weekend x-axis labels
+  const xLabels = allDates.map((d, i) => {
+    const label = d.slice(5);
+    return weekendIndices.includes(i) ? label + ' \uD83D\uDCA4' : label;
+  });
+
+  charts.revenue = new Chart(ctx, { type: 'line', data: { labels: xLabels, datasets }, plugins: [weekendPlugin], options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { title: items => { const i = items[0]?.dataIndex; return allDates[i] ? allDates[i] + (weekendIndices.includes(i) ? ' (Weekend)' : '') : ''; }, label: c => c.parsed.y != null ? `${c.dataset.label}: $${c.parsed.y.toLocaleString()}` : '' } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => '$'+v.toLocaleString() } }, x: { ticks: { font: ctx2 => weekendIndices.includes(ctx2.index) ? { size: 9, style: 'italic' } : { size: 10 }, color: ctx2 => weekendIndices.includes(ctx2.index) ? '#555' : '#888' } } } } });
 }
 
 // ============================================================
 // TRIAL vs CONVERTED
 // ============================================================
 const DATALABEL_OPTS = { display: true, anchor: 'end', align: 'end', color: '#ccc', font: { size: 11, weight: '600' }, formatter: v => v > 0 ? v.toLocaleString() : '' };
+
+// Max trial duration in days per PP (longest trial = yearly plan trial)
+const TRIAL_WINDOW_DAYS = {
+  'cno_pro_n_plus': 30, // 7d monthly, 30d yearly
+  'AFib': 7,            // 3d monthly, 7d yearly
+  'Cardio': 7,          // 3d monthly, 7d yearly
+  'Respiratory': 7,     // 3d monthly, 7d yearly
+  'Tesla': 7,           // 3d monthly, 7d yearly
+};
+
+// Compute "still on trial" count: trial users from last N days who haven't converted yet
+function getStillOnTrial(pp, mk) {
+  const td = getTrialDataForMonth(pp, mk);
+  if (!td || !td.dates || !td.trial) return 0;
+  const window = TRIAL_WINDOW_DAYS[pp] || 7;
+  const today = new Date();
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() - window);
+  let stillOnTrial = 0;
+  for (let i = 0; i < td.dates.length; i++) {
+    const d = new Date(td.dates[i] + 'T00:00:00');
+    if (d > cutoff) {
+      // These users started trial within the window — some may not have had time to convert
+      const notConverted = (td.trial[i] || 0) - (td.converted[i] || 0);
+      if (notConverted > 0) stillOnTrial += notConverted;
+    }
+  }
+  return stillOnTrial;
+}
+
+// Eligible trials = total trials minus those still within trial window
+function getEligibleTrials(pp, mk) {
+  return Math.max(0, (hasRealTrialData(pp) ? getMonthlyTrials(pp, mk) : getMonthlySubs(pp, mk)) - getStillOnTrial(pp, mk));
+}
 
 function renderTrialChart() {
   if (charts.trial) charts.trial.destroy();
@@ -1398,35 +1709,52 @@ function renderTrialChart() {
     const labels = months.map(m => { const d = new Date(m+'-01'); return d.toLocaleString('default',{month:'short',year:'2-digit'}); });
     const trialData = months.map(mk => plugs.reduce((s,p) => s + getTrialVal(p,mk), 0));
     const convData = months.map(mk => plugs.reduce((s,p) => s + getConvVal(p,mk), 0));
-    charts.trial = new Chart(ctx, { type: 'bar', data: { labels, datasets: [
+    const onTrialData = months.map(mk => plugs.reduce((s,p) => s + getStillOnTrial(p,mk), 0));
+    const datasets = [
       { label: 'Trial Users', data: trialData, backgroundColor: 'rgba(124,92,252,0.35)', borderColor: '#7c5cfc', borderWidth: 1, borderRadius: 4, datalabels: DATALABEL_OPTS },
       { label: 'Converted (Paid)', data: convData, backgroundColor: 'rgba(74,222,128,0.35)', borderColor: '#4ade80', borderWidth: 1, borderRadius: 4, datalabels: {...DATALABEL_OPTS, color: '#4ade80'} },
-    ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 11 } } } }, scales: { y: { beginAtZero: true } } } });
+    ];
+    // Only show "Still on Trial" bar if there are any
+    if (onTrialData.some(v => v > 0)) {
+      datasets.push({ label: 'Still on Trial', data: onTrialData, backgroundColor: 'rgba(251,191,36,0.30)', borderColor: '#fbbf24', borderWidth: 1, borderRadius: 4, datalabels: {...DATALABEL_OPTS, color: '#fbbf24'} });
+    }
+    charts.trial = new Chart(ctx, { type: 'bar', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true } } } });
     return;
   }
 
   const labels = plugs.map(displayName);
   const trialValues = plugs.map(p => getTrialVal(p, currentMonth));
   const convValues = plugs.map(p => getConvVal(p, currentMonth));
-  charts.trial = new Chart(ctx, { type: 'bar', data: { labels, datasets: [
+  const onTrialValues = plugs.map(p => getStillOnTrial(p, currentMonth));
+  const eligibleValues = plugs.map(p => getEligibleTrials(p, currentMonth));
+  const datasets = [
     { label: 'Trial Users', data: trialValues, backgroundColor: 'rgba(124,92,252,0.35)', borderColor: '#7c5cfc', borderWidth: 1, borderRadius: 6, datalabels: DATALABEL_OPTS },
     { label: 'Converted (Paid)', data: convValues, backgroundColor: 'rgba(74,222,128,0.35)', borderColor: '#4ade80', borderWidth: 1, borderRadius: 6, datalabels: {...DATALABEL_OPTS, color: '#4ade80'} },
-  ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 11 } } } }, scales: { y: { beginAtZero: true } } } });
+  ];
+  if (onTrialValues.some(v => v > 0)) {
+    datasets.push({ label: 'Still on Trial', data: onTrialValues, backgroundColor: 'rgba(251,191,36,0.30)', borderColor: '#fbbf24', borderWidth: 1, borderRadius: 6, datalabels: {...DATALABEL_OPTS, color: '#fbbf24'} });
+  }
+  charts.trial = new Chart(ctx, { type: 'bar', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true } } } });
 
-  // Render conversion % callouts below chart
+  // Render conversion % callouts below chart — show raw + eligible rate
   const calloutEl = document.getElementById('trialConversionCallouts');
   if (calloutEl) {
-    let html = '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">';
+    const hasOnTrial = onTrialValues.some(v => v > 0);
+    let html = '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">';
     plugs.forEach((p, i) => {
-      const rate = trialValues[i] > 0 ? ((convValues[i] / trialValues[i]) * 100).toFixed(1) : '0.0';
+      const rawRate = trialValues[i] > 0 ? ((convValues[i] / trialValues[i]) * 100).toFixed(1) : '0.0';
+      const eligRate = eligibleValues[i] > 0 ? ((convValues[i] / eligibleValues[i]) * 100).toFixed(1) : rawRate;
       const color = COLORS[p]?.border || '#888';
-      html += `<div style="background:rgba(255,255,255,0.03);border:1px solid ${color}33;border-radius:8px;padding:8px 14px;text-align:center;min-width:100px">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:#888">${displayName(p)}</div>
-        <div style="font-size:18px;font-weight:700;color:${color}">${rate}%</div>
-        <div style="font-size:10px;color:#555">conversion</div>
+      const showElig = hasOnTrial && eligibleValues[i] !== trialValues[i];
+      html += `<div style="background:rgba(255,255,255,0.03);border:1px solid ${color}33;border-radius:6px;padding:5px 10px;text-align:center;min-width:70px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#888">${displayName(p)}</div>
+        ${showElig ? `<div style="font-size:15px;font-weight:700;color:${color}">${eligRate}%</div><div style="font-size:9px;color:#555">eligible conv.</div>` : `<div style="font-size:15px;font-weight:700;color:${color}">${rawRate}%</div>`}
       </div>`;
     });
     html += '</div>';
+    if (hasOnTrial) {
+      html += `<div style="margin-top:6px;font-size:10px;color:#666;text-align:center">⚠️ Eligible conv. rate excludes users whose free trial hasn't ended yet</div>`;
+    }
     calloutEl.innerHTML = html;
   }
 }
@@ -1501,135 +1829,99 @@ function renderPPLegend() {
 }
 
 // ============================================================
-// CHANNEL BREAKDOWN
+// PLAN MIX (Monthly / Yearly / 2-Year breakdown)
 // ============================================================
-function renderChannelBreakdown() {
-  const container = document.getElementById('channelBreakdown');
-  if (!container || !CHANNEL_DATA || !Object.keys(CHANNEL_DATA).length) {
-    if (container) container.innerHTML = '<div style="color:#555;font-size:13px;padding:10px">No channel data available.</div>';
+function renderPlanMix() {
+  const canvas = document.getElementById('planMixChart');
+  const tableDiv = document.getElementById('planMixTable');
+  if (!canvas || !tableDiv) return;
+
+  const months = Object.keys(PLAN_MIX).sort();
+  if (months.length === 0) {
+    tableDiv.innerHTML = '<div class="no-campaigns">No plan mix data available</div>';
     return;
   }
 
+  const planTypes = ['Monthly', 'Yearly', '2-Year'];
+  const planColors = { 'Monthly': '#f59e0b', 'Yearly': '#7c5cfc', '2-Year': '#4ade80' };
   const plugs = getPlugs();
-  const CHANNEL_COLORS = {
-    'In-App': '#7c5cfc',
-    'Organic': '#22c55e',
-    'Influencer Marketing': '#f59e0b',
-    'Performance Marketing': '#3b82f6',
-    'Referrals': '#ec4899',
-    'Other Channels': '#6b7280'
-  };
-  // Display labels with purchase channel context
-  const CHANNEL_LABELS = {
-    'In-App': 'In-App (RevenueCat)',
-    'Organic': 'Organic (Shopify + Stripe)',
-    'Influencer Marketing': 'Influencer Marketing',
-    'Performance Marketing': 'Performance Marketing',
-    'Referrals': 'Referrals',
-    'Other Channels': 'Other Channels'
-  };
-  const channelOrder = ['In-App', 'Organic', 'Influencer Marketing', 'Performance Marketing', 'Referrals', 'Other Channels'];
 
-  // Aggregate by selected PP(s)
-  let channelTotals = {};
-  channelOrder.forEach(c => channelTotals[c] = 0);
+  // Aggregate by month and plan type (across selected PPs)
+  const monthLabels = months.map(mk => {
+    const d = new Date(mk + '-01');
+    return d.toLocaleString('default', { month: 'short', year: '2-digit' });
+  });
 
-  plugs.forEach(p => {
-    const ppData = CHANNEL_DATA[p];
-    if (!ppData) return;
-    Object.keys(ppData).forEach(ch => {
-      if (channelTotals.hasOwnProperty(ch)) channelTotals[ch] += ppData[ch].revenue;
+  const datasets = planTypes.map(pt => ({
+    label: pt,
+    data: months.map(mk => {
+      let total = 0;
+      plugs.forEach(p => {
+        total += PLAN_MIX[mk]?.[p]?.[pt]?.revenue || 0;
+      });
+      return Math.round(total);
+    }),
+    backgroundColor: planColors[pt],
+    borderRadius: 4,
+  }));
+
+  if (charts.planMix) charts.planMix.destroy();
+  charts.planMix = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: monthLabels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' } },
+      },
+      plugins: {
+        legend: { position: 'top', labels: { usePointStyle: true, padding: 16 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const val = ctx.raw;
+              const total = ctx.chart.data.datasets.reduce((s, ds) => s + ds.data[ctx.dataIndex], 0);
+              const pct = total > 0 ? (val / total * 100).toFixed(1) : 0;
+              return `${ctx.dataset.label}: $${val.toLocaleString()} (${pct}%)`;
+            }
+          }
+        },
+        datalabels: {
+          display: ctx => ctx.raw > 5000,
+          color: '#fff',
+          font: { size: 10, weight: '600' },
+          formatter: v => '$' + (v/1000).toFixed(0) + 'K',
+        },
+      },
+    },
+  });
+
+  // Render summary table below
+  let html = '<table class="projection-table"><thead><tr><th>Month</th>';
+  planTypes.forEach(pt => html += `<th>${pt}</th>`);
+  html += '<th>Total</th><th>% Yearly</th><th>% 2-Year</th></tr></thead><tbody>';
+  months.forEach((mk, i) => {
+    const d = new Date(mk + '-01');
+    const label = d.toLocaleString('default', { month: 'short', year: 'numeric' });
+    const vals = {};
+    let total = 0;
+    planTypes.forEach(pt => {
+      let v = 0;
+      plugs.forEach(p => { v += PLAN_MIX[mk]?.[p]?.[pt]?.revenue || 0; });
+      vals[pt] = Math.round(v);
+      total += vals[pt];
     });
+    const yPct = total > 0 ? (vals['Yearly'] / total * 100).toFixed(1) : '0.0';
+    const tPct = total > 0 ? (vals['2-Year'] / total * 100).toFixed(1) : '0.0';
+    html += `<tr><td>${label}</td>`;
+    planTypes.forEach(pt => html += `<td>$${vals[pt].toLocaleString()}</td>`);
+    html += `<td style="font-weight:700">$${total.toLocaleString()}</td>`;
+    html += `<td style="color:#7c5cfc">${yPct}%</td>`;
+    html += `<td style="color:#4ade80">${tPct}%</td></tr>`;
   });
-
-  const grandTotal = Object.values(channelTotals).reduce((s,v) => s+v, 0);
-
-  // Build per-PP breakdown table
-  let html = '';
-
-  // Legend
-  html += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">';
-  channelOrder.forEach(ch => {
-    html += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa"><div style="width:12px;height:12px;border-radius:3px;background:${CHANNEL_COLORS[ch]}"></div>${CHANNEL_LABELS[ch] || ch}</div>`;
-  });
-  html += '</div>';
-
-  // Overall horizontal stacked bar
-  html += '<div style="margin-bottom:20px">';
-  html += '<div style="font-size:12px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Overall Split · $' + (grandTotal/1000).toFixed(0) + 'K total</div>';
-  html += '<div style="display:flex;height:32px;border-radius:8px;overflow:hidden;background:#1a1a2e">';
-  channelOrder.forEach(ch => {
-    const pct = grandTotal > 0 ? (channelTotals[ch] / grandTotal * 100) : 0;
-    if (pct > 0) {
-      html += `<div style="width:${pct}%;background:${CHANNEL_COLORS[ch]};display:flex;align-items:center;justify-content:center;font-size:${pct > 8 ? '11' : '9'}px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden" title="${ch}: $${(channelTotals[ch]/1000).toFixed(1)}K (${pct.toFixed(1)}%)">${pct >= 5 ? pct.toFixed(0) + '%' : ''}</div>`;
-    }
-  });
-  html += '</div></div>';
-
-  // Per-PP rows
-  const showPlugs = currentPP === 'All' ? PLUGS : [currentPP];
-  html += '<div style="display:grid;gap:10px">';
-  showPlugs.forEach(p => {
-    const ppData = CHANNEL_DATA[p];
-    if (!ppData) return;
-    const ppTotal = channelOrder.reduce((s,ch) => s + (ppData[ch]?.revenue || 0), 0);
-    if (ppTotal <= 0) return;
-
-    html += '<div style="display:grid;grid-template-columns:100px 1fr 80px;align-items:center;gap:12px">';
-    // PP name
-    const badgeClass = p === 'CnO Pro' ? 'badge-CnO' : p === 'AFib' ? 'badge-AFib' : p === 'Cardio' ? 'badge-Cardio' : p === 'Respiratory' ? 'badge-Respiratory' : 'badge-Tesla';
-    html += `<div><span class="plug-badge ${badgeClass}">${p}</span></div>`;
-    // Stacked bar
-    html += '<div style="display:flex;height:24px;border-radius:6px;overflow:hidden;background:#12121e">';
-    channelOrder.forEach(ch => {
-      const rev = ppData[ch]?.revenue || 0;
-      const pct = ppTotal > 0 ? (rev / ppTotal * 100) : 0;
-      if (pct > 0) {
-        html += `<div style="width:${pct}%;background:${CHANNEL_COLORS[ch]};display:flex;align-items:center;justify-content:center;font-size:${pct > 10 ? '10' : '8'}px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden" title="${ch}: $${(rev/1000).toFixed(1)}K (${pct.toFixed(1)}%)">${pct >= 8 ? pct.toFixed(0) + '%' : ''}</div>`;
-      }
-    });
-    html += '</div>';
-    // Total
-    html += `<div style="font-size:12px;color:#aaa;text-align:right">$${(ppTotal/1000).toFixed(1)}K</div>`;
-    html += '</div>';
-  });
-  html += '</div>';
-
-  // Channel detail table
-  html += '<div style="margin-top:18px;overflow-x:auto">';
-  html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
-  html += '<thead><tr style="border-bottom:1px solid #2a2a3e"><th style="text-align:left;padding:8px 10px;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:0.8px">Channel</th>';
-  showPlugs.forEach(p => {
-    html += `<th style="text-align:right;padding:8px 10px;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:0.8px">${p}</th>`;
-  });
-  html += '<th style="text-align:right;padding:8px 10px;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:0.8px">Total</th><th style="text-align:right;padding:8px 10px;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:0.8px">%</th></tr></thead><tbody>';
-
-  channelOrder.forEach(ch => {
-    html += '<tr style="border-bottom:1px solid #1a1a2e">';
-    html += `<td style="padding:7px 10px;color:#e0e0e0"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${CHANNEL_COLORS[ch]};margin-right:8px;vertical-align:middle"></span>${CHANNEL_LABELS[ch] || ch}</td>`;
-    showPlugs.forEach(p => {
-      const rev = CHANNEL_DATA[p]?.[ch]?.revenue || 0;
-      html += `<td style="text-align:right;padding:7px 10px;color:${rev > 0 ? '#ccc' : '#444'}">$${(rev/1000).toFixed(1)}K</td>`;
-    });
-    const total = channelTotals[ch] || 0;
-    const pct = grandTotal > 0 ? (total / grandTotal * 100).toFixed(1) : '0.0';
-    html += `<td style="text-align:right;padding:7px 10px;color:#fff;font-weight:600">$${(total/1000).toFixed(1)}K</td>`;
-    html += `<td style="text-align:right;padding:7px 10px;color:#7c5cfc;font-weight:600">${pct}%</td>`;
-    html += '</tr>';
-  });
-
-  // Grand total row
-  html += '<tr style="border-top:2px solid #2a2a3e"><td style="padding:8px 10px;color:#fff;font-weight:700">Total</td>';
-  showPlugs.forEach(p => {
-    const ppTotal = channelOrder.reduce((s,ch) => s + (CHANNEL_DATA[p]?.[ch]?.revenue || 0), 0);
-    html += `<td style="text-align:right;padding:8px 10px;color:#fff;font-weight:700">$${(ppTotal/1000).toFixed(1)}K</td>`;
-  });
-  html += `<td style="text-align:right;padding:8px 10px;color:#fff;font-weight:700">$${(grandTotal/1000).toFixed(1)}K</td>`;
-  html += '<td style="text-align:right;padding:8px 10px;color:#7c5cfc;font-weight:700">100%</td></tr>';
-
-  html += '</tbody></table></div>';
-
-  container.innerHTML = html;
+  html += '</tbody></table>';
+  tableDiv.innerHTML = html;
 }
 
 // ============================================================
@@ -1818,16 +2110,20 @@ function renderProjectionTable() {
   const plugs = getPlugs();
   if (isAllTime()) {
     const months = getMonthKeys();
+    // Pre-compute grand total for % share
+    let grandTotal = 0;
+    months.forEach(mk => plugs.forEach(p => { grandTotal += Math.round(getMonthlyRevenue(p, mk)); }));
     let html = '<table class="projection-table"><thead><tr><th>Month</th>';
     plugs.forEach(p => html += `<th>${displayName(p)}</th>`);
-    html += '<th>Total</th></tr></thead><tbody>';
+    html += '<th>Total</th><th>% of Total</th></tr></thead><tbody>';
     months.forEach(mk => {
       const d = new Date(mk+'-01');
       const label = d.toLocaleString('default',{month:'short',year:'numeric'});
       let rowTotal = 0;
       html += `<tr><td>${label}</td>`;
       plugs.forEach(p => { const v = Math.round(getMonthlyRevenue(p,mk)); rowTotal += v; html += `<td>$${v.toLocaleString()}</td>`; });
-      html += `<td style="font-weight:700">$${rowTotal.toLocaleString()}</td></tr>`;
+      const pctShare = grandTotal > 0 ? (rowTotal / grandTotal * 100).toFixed(1) + '%' : '\u2014';
+      html += `<td style="font-weight:700">$${rowTotal.toLocaleString()}</td><td style="color:#888">${pctShare}</td></tr>`;
     });
     html += '</tbody></table>';
     container.innerHTML = html;
@@ -1860,6 +2156,10 @@ function renderProjectionTable() {
     return getMonthlyPurchases(p, m);
   }
 
+  // Pre-compute total MTD revenue for % share calculation
+  let grandMtd = 0;
+  plugs.forEach(p => { grandMtd += Math.round(getMonthlyRevenue(p, mk)); });
+
   let rows = plugs.map(p => {
     const mtd = Math.round(getMonthlyRevenue(p,mk));
     const avg = Math.round(mtd/daysElapsed);
@@ -1869,7 +2169,8 @@ function renderProjectionTable() {
     const activeUsers = (USER_DATA[p]?.users || 0);
     const onTrial = getTrialCount(p, mk);
     const paidUsers = getPaidCount(p, mk);
-    return `<tr><td><span class="plug-badge ${getBadgeClass(p)}">${displayName(p)}</span></td><td style="color:#aaa">${activeUsers > 0 ? activeUsers.toLocaleString() : '\u2014'}</td><td style="color:#7c5cfc">${onTrial.toLocaleString()}</td><td style="color:#4ade80">${paidUsers.toLocaleString()}</td><td>$${mtd.toLocaleString()}</td><td>$${avg.toLocaleString()}</td><td class="projected">$${proj.toLocaleString()}</td><td class="target-col">${pt>0?'$'+pt.toLocaleString():'\u2014'}</td><td>${purch.toLocaleString()}</td></tr>`;
+    const pctShare = grandMtd > 0 ? (mtd / grandMtd * 100).toFixed(1) + '%' : '\u2014';
+    return `<tr><td><span class="plug-badge ${getBadgeClass(p)}">${displayName(p)}</span></td><td style="color:#aaa">${activeUsers > 0 ? activeUsers.toLocaleString() : '\u2014'}</td><td style="color:#7c5cfc">${onTrial.toLocaleString()}</td><td style="color:#4ade80">${paidUsers.toLocaleString()}</td><td>$${mtd.toLocaleString()}</td><td style="color:#888">${pctShare}</td><td>$${avg.toLocaleString()}</td><td class="projected">$${proj.toLocaleString()}</td><td class="target-col">${pt>0?'$'+pt.toLocaleString():'\u2014'}</td><td>${purch.toLocaleString()}</td></tr>`;
   });
 
   if (plugs.length > 1) {
@@ -1877,13 +2178,12 @@ function renderProjectionTable() {
     plugs.forEach(p => { tMtd+=Math.round(getMonthlyRevenue(p,mk)); tPurch+=getMonthlyPurchases(p,mk); tTarget+=(campaigns[p]||[]).reduce((s,c)=>s+(Number(c.expectedRevenue)||0),0); tOnTrial+=getTrialCount(p,mk); tPaid+=getPaidCount(p,mk); });
     tTarget += (campaigns['General']||[]).reduce((s,c)=>s+(Number(c.expectedRevenue)||0),0);
     const tAvg=Math.round(tMtd/daysElapsed), tProj=Math.round(tAvg*daysInMonth);
-    // Total active users: use dedicated total if available, else note it's not a simple sum
     const totalActiveUsers = USER_DATA._total?.users || null;
     const totalActiveStr = totalActiveUsers ? totalActiveUsers.toLocaleString() : '\u2014*';
-    rows.push(`<tr style="font-weight:700;border-top:2px solid #7c5cfc"><td>Total</td><td style="color:#aaa">${totalActiveStr}</td><td style="color:#7c5cfc">${tOnTrial.toLocaleString()}</td><td style="color:#4ade80">${tPaid.toLocaleString()}</td><td>$${tMtd.toLocaleString()}</td><td>$${tAvg.toLocaleString()}</td><td class="projected">$${tProj.toLocaleString()}</td><td class="target-col">${tTarget>0?'$'+tTarget.toLocaleString():'\u2014'}</td><td>${tPurch.toLocaleString()}</td></tr>`);
+    rows.push(`<tr style="font-weight:700;border-top:2px solid #7c5cfc"><td>Total</td><td style="color:#aaa">${totalActiveStr}</td><td style="color:#7c5cfc">${tOnTrial.toLocaleString()}</td><td style="color:#4ade80">${tPaid.toLocaleString()}</td><td>$${tMtd.toLocaleString()}</td><td style="color:#888">100%</td><td>$${tAvg.toLocaleString()}</td><td class="projected">$${tProj.toLocaleString()}</td><td class="target-col">${tTarget>0?'$'+tTarget.toLocaleString():'\u2014'}</td><td>${tPurch.toLocaleString()}</td></tr>`);
   }
 
-  container.innerHTML = `<table class="projection-table"><thead><tr><th>Powerplug</th><th>Active Users</th><th>On Trial</th><th>Paid Users</th><th>Revenue MTD</th><th>Daily Avg</th><th>Projected</th><th>Target</th><th>Purchases</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  container.innerHTML = `<table class="projection-table"><thead><tr><th>Powerplug</th><th>Active Users</th><th>On Trial</th><th>Paid Users</th><th>Revenue MTD</th><th>% Share</th><th>Daily Avg</th><th>Projected</th><th>Target</th><th>Purchases</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
 // ============================================================
@@ -1914,8 +2214,8 @@ function renderCampaignTracker() {
         <td><select onchange="moveCampaign('${cat}','${c.id}',this.value)">${ppOptions(cat, true)}</select></td>
         <td><select onchange="updateCampaign('${cat}','${c.id}','subType',this.value)">${subTypeOptions(c.subType||'Other')}</select></td>
         <td><input type="text" value="${escHtml(c.name)}" onchange="updateCampaign('${cat}','${c.id}','name',this.value)" placeholder="Initiative name" /></td>
-        <td><input type="date" value="${c.startDate||''}" onchange="updateCampaign('${cat}','${c.id}','startDate',this.value)" /></td>
-        <td><input type="date" value="${c.endDate||''}" onchange="updateCampaign('${cat}','${c.id}','endDate',this.value)" /></td>
+        <td><input type="date" value="${c.startDate||''}" min="2023-01-01" onchange="updateCampaign('${cat}','${c.id}','startDate',this.value)" /></td>
+        <td><input type="date" value="${c.endDate||''}" min="2023-01-01" onchange="updateCampaign('${cat}','${c.id}','endDate',this.value)" /></td>
         <td><input type="number" value="${c.expectedRevenue||''}" onchange="updateCampaign('${cat}','${c.id}','expectedRevenue',this.value)" placeholder="$0" /></td>
         <td><input type="number" value="${c.actualRevenue||''}" onchange="updateCampaign('${cat}','${c.id}','actualRevenue',this.value)" placeholder="$0" /></td>
         <td><select onchange="updateCampaign('${cat}','${c.id}','status',this.value)">
@@ -1970,15 +2270,17 @@ const COUNTRY_STORAGE_KEY = 'powerplugs-active-countries';
 
 function getDefaultCountryData() {
   const data = {};
-  // AFib Detection (powered by FibriCheck): Australia, EU, Singapore, UAE, UK, Saudi Arabia
-  const afibCountries = ['Australia','Germany','UAE','UK + IR','Switzerland','Spain','Netherlands','Singapore','Czech Republic'];
+  // AFib Detection (powered by FibriCheck): Australia, Europe, Singapore, UAE, UK, Saudi Arabia
+  const afibCountries = ['Australia','UK + IR','Singapore','UAE','Saudi Arabia','Germany','Czech Republic','Switzerland','Spain','Netherlands','France','Poland','Austria','Italy','Belgium'];
   // Cardio Adaptability: USA, India, Canada
   const cardioCountries = ['USA','India','Canada'];
   // C&O Pro: US, UK, Australia, Canada + EU/European countries
   const cnoProCountries = ['USA','UK + IR','Australia','Canada','Germany','Czech Republic','Spain','Netherlands','Switzerland','France','Poland','Austria','Italy','Belgium'];
   // C&O Plus: all other regions not in C&O Pro (India, UAE, Thailand, Philippines, Singapore, NZ, Mexico, Saudi Arabia, etc.)
   const cnoPlusCountries = ['India','UAE','Thailand','Singapore','Philippines','Mexico','Saudi Arabia','New Zealand'];
-  // Respiratory, Tesla: placeholder
+  // Respiratory: placeholder
+  // Tesla: countries with actual revenue recognition (from Snowflake all_purchase)
+  const teslaCountries = ['USA','UAE','France','UK + IR','Canada','Thailand','Italy','Czech Republic','India','Australia','Spain','Austria','Philippines','Mexico','Saudi Arabia','Singapore','Poland','Germany','New Zealand','Switzerland'];
   COUNTRIES.forEach(country => {
     data[country] = {};
     data[country]['AFib'] = afibCountries.includes(country);
@@ -1986,7 +2288,7 @@ function getDefaultCountryData() {
     data[country]['CnO Pro'] = cnoProCountries.includes(country);
     data[country]['CnO Plus'] = cnoPlusCountries.includes(country);
     data[country]['Respiratory'] = ['USA','India','Canada','UK + IR','Australia','Germany','UAE'].includes(country);
-    data[country]['Tesla'] = true;
+    data[country]['Tesla'] = teslaCountries.includes(country);
   });
   return data;
 }
@@ -2181,7 +2483,7 @@ function renderEmailTracker() {
   emails.sort((a,b) => (b.sendDate||'').localeCompare(a.sendDate||''));
 
   if (!emails.length) {
-    container.innerHTML = '<div class="no-campaigns">No email campaigns yet. Click "+ Add Email Campaign" to get started, or import a CSV.</div>';
+    container.innerHTML = '<div class="no-campaigns">No campaigns yet. Click "+ Add Campaign" to get started, or import a CSV.</div>';
     return;
   }
 
@@ -2192,7 +2494,7 @@ function renderEmailTracker() {
     html += `<tr>
       <td><select onchange="updateEmail('${e.id}','powerplug',this.value)">${ppOptions(e.powerplug, true)}</select></td>
       <td><input type="text" value="${escHtml(e.name)}" onchange="updateEmail('${e.id}','name',this.value)" placeholder="Campaign name" /></td>
-      <td><input type="date" value="${e.sendDate||''}" onchange="updateEmail('${e.id}','sendDate',this.value)" /></td>
+      <td><input type="date" value="${e.sendDate||''}" min="2023-01-01" onchange="updateEmail('${e.id}','sendDate',this.value)" /></td>
       <td><input type="text" value="${escHtml(e.subject)}" onchange="updateEmail('${e.id}','subject',this.value)" placeholder="Subject line" /></td>
       <td><input type="number" value="${e.recipients||''}" onchange="updateEmail('${e.id}','recipients',this.value)" placeholder="0" style="width:80px" /></td>
       <td><input type="number" value="${e.opens||''}" onchange="updateEmail('${e.id}','opens',this.value)" placeholder="0" style="width:70px" /></td>
