@@ -2290,10 +2290,10 @@ const COUNTRY_STORAGE_KEY = 'powerplugs-active-countries';
 
 function getDefaultCountryData() {
   const data = {};
-  // AFib Detection (powered by FibriCheck): AU, UK, SG, UAE, SA + EU countries only
+  // AFib Detection (powered by FibriCheck): AU, UK, SG, UAE, SA + EU countries — MUTUALLY EXCLUSIVE with Cardio
   const afibCountries = ['Australia','UK + IR','Singapore','UAE','Saudi Arabia','Germany','Czech Republic','Switzerland','Spain','Netherlands','France','Poland','Austria','Italy','Belgium'];
-  // Cardio Adaptability: available globally (validated from all_purchase, all 23 countries have ≥44 unique users)
-  const cardioCountries = ['USA','India','Canada','UK + IR','Australia','Germany','UAE','Czech Republic','Thailand','Switzerland','Spain','Netherlands','Singapore','Philippines','France','Mexico','Poland','Saudi Arabia','Austria','Italy','Belgium','New Zealand','Taiwan'];
+  // Cardio Adaptability: all non-AFib countries (Cardio & AFib are mutually exclusive)
+  const cardioCountries = ['USA','India','Canada','Thailand','Philippines','Mexico','New Zealand','Taiwan'];
   // C&O Pro: US, UK, Australia, Canada, EU, Norway, Iceland, Isle of Man, Bosnia & Herzegovina, Moldova, Albania ONLY
   const cnoProCountries = ['USA','UK + IR','Australia','Canada','Germany','Czech Republic','Spain','Netherlands','Switzerland','France','Poland','Austria','Italy','Belgium'];
   // C&O Plus: all other regions not in C&O Pro
