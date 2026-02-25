@@ -32,6 +32,15 @@ jobs:
           echo "METABASE_URL=${{ secrets.METABASE_URL }}" > .env
           echo "METABASE_API_KEY=${{ secrets.METABASE_API_KEY }}" >> .env
 
+      - name: Verify template exists
+        run: |
+          if [ ! -f dashboard_template.html ]; then
+            echo "ERROR: dashboard_template.html not found in repo!"
+            echo "Make sure to commit the template when making dashboard changes."
+            exit 1
+          fi
+          echo "Template found: $(wc -l < dashboard_template.html) lines"
+
       - name: Run refresh script
         run: python3 refresh_dashboard.py
 
