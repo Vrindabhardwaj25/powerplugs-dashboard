@@ -295,8 +295,8 @@
       <div id="campaignTracker"></div>
     </div>
     <div class="chart-card full-width">
-      <h2>User Base <span style="font-size:11px;font-weight:400;color:#fbbf24">(All-Time Cumulative)</span></h2>
-      <div class="subtitle">All-time trial &amp; paid users per powerplug (since Sep 2025) with gender split. Source: RevCat. Note: one user may use multiple powerplugs, so total ≠ sum of individual PPs.</div>
+      <h2>User Base <span style="font-size:11px;font-weight:400;color:#4ade80">(Currently Active)</span></h2>
+      <div class="subtitle">Currently active users: paid subscribers (within plan duration) + users on active free trial. Source: all_purchase + RevCat. One user may use multiple PPs.</div>
       <div class="user-stats-grid" id="userStatsGrid"></div>
       <div id="userOverlapSection" style="margin-top:18px"></div>
     </div>
@@ -1051,12 +1051,12 @@ function renderUserStats() {
   let html = '';
 
   plugs.forEach(p => {
-    const ud = USER_DATA[p] || { users: 0, paid: 0, male: 50, female: 50 };
-    const onTrial = ud.users - (ud.paid || 0);
+    const ud = USER_DATA[p] || { users: 0, paid: 0, on_trial: 0, male: 50, female: 50 };
+    const onTrial = ud.on_trial || Math.max(0, ud.users - (ud.paid || 0));
     html += `<div class="user-stat-card">
       <div class="stat-label">${displayName(p)}</div>
       <div class="stat-value">${ud.users.toLocaleString()}</div>
-      <div class="stat-sub">total users &middot; <span style="color:#4ade80">${(ud.paid||0).toLocaleString()} paid</span>${onTrial > 0 ? ' &middot; <span style="color:#7c5cfc">'+onTrial.toLocaleString()+' trial</span>' : ''}</div>
+      <div class="stat-sub">active users &middot; <span style="color:#4ade80">${(ud.paid||0).toLocaleString()} paid</span>${onTrial > 0 ? ' &middot; <span style="color:#fbbf24">'+onTrial.toLocaleString()+' on trial</span>' : ''}</div>
       <div class="gender-bar"><div class="male" style="width:${ud.male}%"></div><div class="female" style="width:${ud.female}%"></div></div>
       <div class="gender-labels"><span class="m">\u2642 ${ud.male}%</span><span class="f">\u2640 ${ud.female}%</span></div>
     </div>`;
@@ -1066,18 +1066,13 @@ function renderUserStats() {
   if (plugs.length > 1) {
     const total = USER_DATA['_total'] || { users: 0, male: 50, female: 50 };
     const sumPaid = PLUGS.reduce((s,p) => s + (USER_DATA[p]?.paid||0), 0);
-    const trueTotal = USER_OVERLAP.total_unique || 0;
+    const sumOnTrial = PLUGS.reduce((s,p) => s + (USER_DATA[p]?.on_trial||0), 0);
     const naiveSum = PLUGS.reduce((s,p) => s + (USER_DATA[p]?.users||0), 0);
-    const displayTotal = trueTotal > 0 ? trueTotal : (total.users > 0 ? total.users : naiveSum);
-    const overlap = trueTotal > 0 ? naiveSum - trueTotal : 0;
-    const overlapPct = trueTotal > 0 ? (overlap / naiveSum * 100).toFixed(1) : 0;
-    const totalLabel = trueTotal > 0
-      ? `<span style="color:#7c5cfc;font-weight:600">deduplicated</span> (${overlap.toLocaleString()} overlap, ${overlapPct}%)`
-      : 'sum across PPs (may overlap)';
+    const displayTotal = naiveSum;
     html = `<div class="user-stat-card">
-      <div class="stat-label">True Unique Users</div>
+      <div class="stat-label">Total Active Users</div>
       <div class="stat-value">${displayTotal.toLocaleString()}</div>
-      <div class="stat-sub">${totalLabel} &middot; <span style="color:#4ade80">${sumPaid.toLocaleString()} paid</span></div>
+      <div class="stat-sub">sum across PPs (may overlap) &middot; <span style="color:#4ade80">${sumPaid.toLocaleString()} paid</span>${sumOnTrial > 0 ? ' &middot; <span style="color:#fbbf24">'+sumOnTrial.toLocaleString()+' on trial</span>' : ''}</div>
       <div class="gender-bar"><div class="male" style="width:${total.male}%"></div><div class="female" style="width:${total.female}%"></div></div>
       <div class="gender-labels"><span class="m">\u2642 ${total.male}%</span><span class="f">\u2640 ${total.female}%</span></div>
     </div>` + html;

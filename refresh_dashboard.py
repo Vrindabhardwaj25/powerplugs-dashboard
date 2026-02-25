@@ -376,29 +376,141 @@ def build_purchase_data(revenue_data):
 
 
 # ============================================================
-# USER DATA (from Metabase card 19529 — trial/paid per PP + gender)
+# USER DATA — Currently active users (paid subscribers + active trials)
 # ============================================================
 def fetch_user_data():
     """
-    Fetches user data from card 19529 (Trial Vs Paid - Powerplugs).
-    Gets total trial + converted users per PP with gender breakdown.
-    NUM_TRIAL_USERS = total users who started a trial (includes converted)
-    SUM_CONVERTED_USERS = users who converted to paid
-    So: paid = converted, on_trial = total - converted, total = total
+    Fetches CURRENTLY ACTIVE powerplug users by combining two sources:
+
+    1. Active Paid Subscribers (from all_purchase):
+       Users whose last purchase is within their plan's duration window.
+       Monthly → last purchase within 35 days
+       Yearly  → last purchase within 370 days
+       2-Year  → last purchase within 740 days
+
+    2. Active Trial Users (from RevCat card 19529):
+       Users who started a trial within the trial window and haven't converted.
+       C&O Pro/Plus → 30 days (longest yearly trial)
+       Others       → 7 days (longest yearly trial)
     """
-    print("Fetching user data from card 19529 via MBQL...")
+    print("Fetching ACTIVE user data...")
 
-    today = datetime.now().strftime('%Y-%m-%d')
+    # ---- Part 1: Active Paid from all_purchase ----
+    print("  [1/2] Fetching active paid subscribers from all_purchase...")
+    paid_sql = f"""
+    WITH user_latest AS (
+      SELECT
+        EMAIL,
+        CASE
+          WHEN POWERPLUG_PLAN LIKE 'AFib%' THEN 'AFib'
+          WHEN POWERPLUG_PLAN LIKE 'Cardio%' THEN 'Cardio'
+          WHEN POWERPLUG_PLAN LIKE 'CnO%' OR POWERPLUG_PLAN LIKE 'cno%' THEN 'CnO Pro'
+          WHEN POWERPLUG_PLAN LIKE 'respiratory%' OR POWERPLUG_PLAN LIKE 'Respiratory%' THEN 'Respiratory'
+          WHEN POWERPLUG_PLAN LIKE 'tesla%' OR POWERPLUG_PLAN LIKE 'Tesla%' THEN 'Tesla'
+          ELSE NULL
+        END as PP,
+        CASE
+          WHEN POWERPLUG_PLAN LIKE '%-monthly' THEN 35
+          WHEN POWERPLUG_PLAN LIKE '%-yearly' OR POWERPLUG_PLAN LIKE '%-1 year' THEN 370
+          WHEN POWERPLUG_PLAN LIKE '%-2 year%' THEN 740
+          ELSE 35
+        END as active_window_days,
+        MAX(TO_DATE(PURCHASE_DATE)) as last_purchase
+      FROM "all_purchase"
+      WHERE PRODUCT_CATEGORY = 'powerplug'
+        AND POWERPLUG_PLAN IS NOT NULL
+      GROUP BY 1, 2, 3
+    ),
+    active_paid AS (
+      SELECT EMAIL, PP
+      FROM user_latest
+      WHERE PP IS NOT NULL
+        AND last_purchase >= DATEADD('day', -active_window_days, CURRENT_DATE())
+    )
+    SELECT PP, COUNT(DISTINCT EMAIL) as active_paid
+    FROM active_paid
+    GROUP BY PP
+    ORDER BY 2 DESC
+    """
 
-    # Query: PP x Gender -> sum(trial), sum(converted)
-    query = {
+    paid_query = {
+        'database': TRIAL_DATABASE_ID,
+        'type': 'native',
+        'native': {'query': paid_sql},
+    }
+
+    paid_by_pp = {}
+    try:
+        result = mb_post('dataset', paid_query)
+        rows = result.get('data', {}).get('rows', [])
+        for r in rows:
+            pp = r[0]
+            if pp in PLUGS:
+                paid_by_pp[pp] = int(r[1] or 0)
+        print(f"    Active paid: {sum(paid_by_pp.values()):,} total — " +
+              ", ".join(f"{p}: {paid_by_pp.get(p,0):,}" for p in PLUGS))
+    except Exception as e:
+        print(f"    WARNING: Failed to fetch active paid: {e}")
+
+    # ---- Part 2: Active Trial Users from RevCat ----
+    print("  [2/2] Fetching active trial users from RevCat...")
+    # Trial window per PP (max trial duration in days)
+    trial_windows = {
+        'cno_pro_n_plus': 30,  # 7d monthly, 30d yearly
+        'afib': 7,
+        'cardio': 7,
+        'respiratory': 7,
+        'tesla': 7,
+    }
+
+    on_trial_by_pp = {}
+    for pp_raw, window in trial_windows.items():
+        pp = PP_MAP.get(pp_raw)
+        if not pp:
+            continue
+        query = {
+            'database': TRIAL_DATABASE_ID,
+            'type': 'query',
+            'query': {
+                'source-table': f'card__{TRIAL_SOURCE_CARD_ID}',
+                'aggregation': [
+                    ['sum', ['field', 'NUM_TRIAL_USERS', {'base-type': 'type/Integer'}]],
+                    ['sum', ['field', 'SUM_CONVERTED_USERS', {'base-type': 'type/Integer'}]],
+                ],
+                'breakout': [
+                    ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}],
+                ],
+                'filter': [
+                    'and',
+                    ['=', ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}], pp_raw],
+                    ['>=', ['field', 'TRIAL_DATE', {'base-type': 'type/Date'}],
+                     ['relative-datetime', -window, 'day']],
+                ],
+            },
+        }
+        try:
+            result = mb_post('dataset', query)
+            rows = result.get('data', {}).get('rows', [])
+            if rows:
+                trials = int(rows[0][1] or 0)
+                converted = int(rows[0][2] or 0)
+                on_trial = max(0, trials - converted)
+                on_trial_by_pp[pp] = on_trial
+        except Exception as e:
+            print(f"    WARNING: Failed to fetch trial data for {pp}: {e}")
+
+    print(f"    On trial: {sum(on_trial_by_pp.values()):,} total — " +
+          ", ".join(f"{p}: {on_trial_by_pp.get(p,0):,}" for p in PLUGS))
+
+    # ---- Part 3: Gender split from RevCat (all-time, just for %) ----
+    print("  [3/3] Fetching gender split from RevCat...")
+    gender_query = {
         'database': TRIAL_DATABASE_ID,
         'type': 'query',
         'query': {
             'source-table': f'card__{TRIAL_SOURCE_CARD_ID}',
             'aggregation': [
                 ['sum', ['field', 'NUM_TRIAL_USERS', {'base-type': 'type/Integer'}]],
-                ['sum', ['field', 'SUM_CONVERTED_USERS', {'base-type': 'type/Integer'}]],
             ],
             'breakout': [
                 ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}],
@@ -408,84 +520,73 @@ def fetch_user_data():
                 'between',
                 ['field', 'TRIAL_DATE', {'base-type': 'type/Date'}],
                 DATA_START_DATE,
-                today,
+                datetime.now().strftime('%Y-%m-%d'),
             ],
         },
     }
 
+    gender_by_pp = defaultdict(lambda: {'male': 0, 'female': 0, 'other': 0, 'total': 0})
     try:
-        result = mb_post('dataset', query)
+        result = mb_post('dataset', gender_query)
         rows = result.get('data', {}).get('rows', [])
-        print(f"  Got {len(rows)} user data rows")
+        for r in rows:
+            pp_raw, gender, count = r[0], r[1], int(r[2] or 0)
+            pp = PP_MAP.get(pp_raw.lower() if pp_raw else '', None)
+            if not pp:
+                continue
+            gender_by_pp[pp]['total'] += count
+            g = (gender or '').lower()
+            if g == 'male':
+                gender_by_pp[pp]['male'] += count
+            elif g == 'female':
+                gender_by_pp[pp]['female'] += count
+            else:
+                gender_by_pp[pp]['other'] += count
     except Exception as e:
-        print(f"  WARNING: Failed to fetch user data: {e}")
-        print("  Falling back to hardcoded data...")
-        return _hardcoded_user_data()
+        print(f"    WARNING: Failed to fetch gender data: {e}")
 
-    if not rows:
-        print("  WARNING: No user data rows returned, using hardcoded fallback")
-        return _hardcoded_user_data()
-
-    # Aggregate per PP: total users, paid, male%, female%
-    pp_data = defaultdict(lambda: {'total': 0, 'paid': 0, 'male': 0, 'female': 0, 'other': 0})
-    grand_total = {'total': 0, 'paid': 0, 'male': 0, 'female': 0, 'other': 0}
-
-    for row in rows:
-        pp_raw, gender, trial_sum, converted_sum = row[0], row[1], int(row[2] or 0), int(row[3] or 0)
-        pp = PP_MAP.get(pp_raw.lower() if pp_raw else '', None)
-        if not pp:
-            continue
-
-        pp_data[pp]['total'] += trial_sum
-        pp_data[pp]['paid'] += converted_sum
-        grand_total['total'] += trial_sum
-        grand_total['paid'] += converted_sum
-
-        gender_lower = (gender or '').lower()
-        if gender_lower == 'male':
-            pp_data[pp]['male'] += trial_sum
-            grand_total['male'] += trial_sum
-        elif gender_lower == 'female':
-            pp_data[pp]['female'] += trial_sum
-            grand_total['female'] += trial_sum
-        else:
-            pp_data[pp]['other'] += trial_sum
-            grand_total['other'] += trial_sum
-
-    # Build output format
+    # ---- Build output ----
     user_data = {}
+    grand_male, grand_female, grand_total_g = 0, 0, 0
     for pp in PLUGS:
-        d = pp_data[pp]
-        total = d['total'] or 1
-        male_pct = round(d['male'] / total * 100)
-        female_pct = round(d['female'] / total * 100)
+        paid = paid_by_pp.get(pp, 0)
+        on_trial = on_trial_by_pp.get(pp, 0)
+        total_active = paid + on_trial
+        gd = gender_by_pp[pp]
+        gt = gd['total'] or 1
+        male_pct = round(gd['male'] / gt * 100)
+        female_pct = round(gd['female'] / gt * 100)
         user_data[pp] = {
-            'users': d['total'],
-            'paid': d['paid'],
+            'users': total_active,
+            'paid': paid,
+            'on_trial': on_trial,
             'male': male_pct,
             'female': female_pct,
         }
-        print(f"  {pp}: {d['total']:,} users ({d['paid']:,} paid, {male_pct}% male, {female_pct}% female)")
+        grand_male += gd['male']
+        grand_female += gd['female']
+        grand_total_g += gd['total']
+        print(f"    {pp}: {total_active:,} active ({paid:,} paid + {on_trial:,} on trial, {male_pct}%M/{female_pct}%F)")
 
-    # Grand total (deduplicated count not available, so use sum with disclaimer)
-    gt = grand_total['total'] or 1
+    ggt = grand_total_g or 1
     user_data['_total'] = {
-        'users': 0,  # Keep 0 to indicate "not deduplicated"
-        'male': round(grand_total['male'] / gt * 100),
-        'female': round(grand_total['female'] / gt * 100),
+        'users': 0,
+        'male': round(grand_male / ggt * 100),
+        'female': round(grand_female / ggt * 100),
     }
 
+    print(f"  Total active (sum, not deduped): {sum(paid_by_pp.values()) + sum(on_trial_by_pp.values()):,}")
     return user_data
 
 
 def _hardcoded_user_data():
     """Fallback hardcoded user data."""
     return {
-        'AFib':        {'users': 3434,  'paid': 3400,  'male': 62, 'female': 38},
-        'Cardio':      {'users': 30648, 'paid': 30549, 'male': 58, 'female': 42},
-        'CnO Pro':     {'users': 25653, 'paid': 24643, 'male': 55, 'female': 45},
-        'Respiratory': {'users': 7757,  'paid': 7391,  'male': 51, 'female': 49},
-        'Tesla':       {'users': 147,   'paid': 131,   'male': 65, 'female': 35},
+        'AFib':        {'users': 3700,  'paid': 3700,  'on_trial': 0, 'male': 62, 'female': 38},
+        'Cardio':      {'users': 34211, 'paid': 34211, 'on_trial': 0, 'male': 58, 'female': 42},
+        'CnO Pro':     {'users': 24835, 'paid': 24835, 'on_trial': 0, 'male': 55, 'female': 45},
+        'Respiratory': {'users': 7288,  'paid': 7288,  'on_trial': 0, 'male': 51, 'female': 49},
+        'Tesla':       {'users': 99,    'paid': 99,    'on_trial': 0, 'male': 65, 'female': 35},
         '_total':      {'users': 0, 'male': 57, 'female': 43},
     }
 
