@@ -105,12 +105,15 @@ COUNTRY_MAP = {
     'italia': 'Italy',
     'belgium': 'Belgium',
     'new zealand': 'New Zealand',
+    'taiwan': 'Taiwan',
+    'taiwan, province of china': 'Taiwan',
 }
 
 DASHBOARD_COUNTRIES = ['USA', 'India', 'Canada', 'UK + IR', 'Australia', 'Germany',
                        'UAE', 'Czech Republic', 'Thailand', 'Switzerland', 'Spain',
                        'Netherlands', 'Singapore', 'Philippines', 'France', 'Mexico',
-                       'Poland', 'Saudi Arabia', 'Austria', 'Italy', 'Belgium', 'New Zealand']
+                       'Poland', 'Saudi Arabia', 'Austria', 'Italy', 'Belgium', 'New Zealand',
+                       'Taiwan']
 
 # Data start date
 DATA_START_DATE = '2025-09-01'
