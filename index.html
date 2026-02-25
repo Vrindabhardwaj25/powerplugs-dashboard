@@ -247,7 +247,7 @@
     </div>
     <div class="chart-card" id="trialCard">
       <h2>Trial vs Converted Users</h2>
-      <div class="subtitle">Trial &amp; conversion data from RevCat</div>
+      <div class="subtitle" id="trialSubtitle">Trial &amp; conversion data from RevCat — for selected month</div>
       <div class="chart-container" style="height:280px"><canvas id="trialChart"></canvas></div>
       <div id="trialConversionCallouts" style="margin-top:8px"></div>
       <div style="margin-top:8px;padding:8px 12px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.2);border-radius:8px;font-size:11px;color:#bbb;line-height:1.6">
@@ -295,8 +295,8 @@
       <div id="campaignTracker"></div>
     </div>
     <div class="chart-card full-width">
-      <h2>User Base</h2>
-      <div class="subtitle">Active users per powerplug with gender split. Note: one user may use multiple powerplugs, so total ≠ sum of individual PPs.</div>
+      <h2>User Base <span style="font-size:11px;font-weight:400;color:#fbbf24">(All-Time Cumulative)</span></h2>
+      <div class="subtitle">All-time trial &amp; paid users per powerplug (since Sep 2025) with gender split. Source: RevCat. Note: one user may use multiple powerplugs, so total ≠ sum of individual PPs.</div>
       <div class="user-stats-grid" id="userStatsGrid"></div>
       <div id="userOverlapSection" style="margin-top:18px"></div>
     </div>
@@ -460,7 +460,7 @@ Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Rob
 Chart.defaults.plugins.datalabels = { display: false };
 
 async function init() {
-  document.getElementById('lastUpdated').textContent = 'Feb 25, 2026 at 11:05 AM' || new Date().toLocaleString();
+  document.getElementById('lastUpdated').textContent = 'Feb 25, 2026 at 11:15 AM' || new Date().toLocaleString();
   const sel = document.getElementById('filterMonth');
   const allMonths = [...new Set([...Object.keys(REVENUE_DATA), ...Object.keys(PURCHASE_DATA)])].sort();
   sel.innerHTML = '<option value="all-time">All Time (Monthly)</option>';
@@ -1703,6 +1703,14 @@ function renderTrialChart() {
   if (charts.trial) charts.trial.destroy();
   const ctx = document.getElementById('trialChart').getContext('2d');
   const plugs = getPlugs();
+
+  // Update subtitle based on time scope
+  const sub = document.getElementById('trialSubtitle');
+  if (sub) {
+    if (hasCustomDates()) sub.textContent = `Trial & conversion data from RevCat — ${customStartDate} to ${customEndDate}`;
+    else if (isAllTime()) sub.textContent = 'Trial & conversion data from RevCat — all-time (should match User Base numbers)';
+    else sub.textContent = `Trial & conversion data from RevCat — ${currentMonth} only`;
+  }
 
   // Use real TRIAL_DATA when available, fall back to subscriptions/purchases proxy
   function getTrialVal(p, mk) { return hasRealTrialData(p) ? getMonthlyTrials(p, mk) : getMonthlySubs(p, mk); }
