@@ -467,7 +467,7 @@ Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Rob
 Chart.defaults.plugins.datalabels = { display: false };
 
 async function init() {
-  document.getElementById('lastUpdated').textContent = 'Feb 25, 2026 at 05:53 PM' || new Date().toLocaleString();
+  document.getElementById('lastUpdated').textContent = 'Feb 25, 2026 at 06:01 PM' || new Date().toLocaleString();
   const sel = document.getElementById('filterMonth');
   const allMonths = [...new Set([...Object.keys(REVENUE_DATA), ...Object.keys(PURCHASE_DATA)])].sort();
   sel.innerHTML = '<option value="all-time">All Time (Monthly)</option>';
@@ -2294,10 +2294,10 @@ function getDefaultCountryData() {
   const afibCountries = ['Australia','UK + IR','Singapore','UAE','Saudi Arabia','Germany','Czech Republic','Switzerland','Spain','Netherlands','France','Poland','Austria','Italy','Belgium'];
   // Cardio Adaptability: USA, India, Canada, Taiwan
   const cardioCountries = ['USA','India','Canada','Taiwan'];
-  // C&O Pro: US, UK, Australia, Canada + EU/European countries
-  const cnoProCountries = ['USA','UK + IR','Australia','Canada','Germany','Czech Republic','Spain','Netherlands','Switzerland','France','Poland','Austria','Italy','Belgium','Taiwan'];
-  // C&O Plus: all other regions not in C&O Pro (India, UAE, Thailand, Philippines, Singapore, NZ, Mexico, Saudi Arabia, etc.)
-  const cnoPlusCountries = ['India','UAE','Thailand','Singapore','Philippines','Mexico','Saudi Arabia','New Zealand'];
+  // C&O Pro: US, UK, Australia, Canada, EU, Norway, Iceland, Isle of Man, Bosnia & Herzegovina, Moldova, Albania ONLY
+  const cnoProCountries = ['USA','UK + IR','Australia','Canada','Germany','Czech Republic','Spain','Netherlands','Switzerland','France','Poland','Austria','Italy','Belgium'];
+  // C&O Plus: all other regions not in C&O Pro
+  const cnoPlusCountries = ['India','UAE','Thailand','Singapore','Philippines','Mexico','Saudi Arabia','New Zealand','Taiwan'];
   // Respiratory: placeholder
   // Tesla: countries with ≥1 unique user (from Snowflake all_purchase, validated Feb 2026)
   const teslaCountries = ['USA','UAE','France','UK + IR','Canada','Thailand','Italy','Czech Republic','India','Australia','Spain','Austria','Philippines','Mexico','Saudi Arabia','Singapore','Poland','Germany','New Zealand','Switzerland'];
@@ -2310,7 +2310,7 @@ function getDefaultCountryData() {
     data[country]['Respiratory'] = ['USA','India','Canada','UK + IR','Australia','Germany','UAE','Taiwan'].includes(country);
     data[country]['Tesla'] = teslaCountries.includes(country);
   });
-  // Taiwan: Cardio ✅, Respiratory ✅, CnO Pro ✅, AFib ❌, Tesla ❌ (added to respective arrays above)
+  // Taiwan: Cardio ✅, Respiratory ✅, CnO Plus ✅, AFib ❌, CnO Pro ❌, Tesla ❌
   return data;
 }
 
