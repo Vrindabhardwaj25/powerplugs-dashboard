@@ -562,8 +562,12 @@ function refreshDashboard() {
     document.head.appendChild(style);
   }
 
-  // Force a hard reload from the server (bypasses cache)
-  setTimeout(() => { window.location.reload(true); }, 300);
+  // Force a hard reload — append cache-busting timestamp to bypass CDN/browser cache
+  setTimeout(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('_t', Date.now());
+    window.location.href = url.toString();
+  }, 300);
 }
 
 // ============================================================
