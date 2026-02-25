@@ -153,6 +153,42 @@
 </style>
 </head>
 <body>
+<div id="authGate" style="position:fixed;inset:0;z-index:9999;background:#0a0a0f;display:flex;align-items:center;justify-content:center">
+  <div style="text-align:center;max-width:340px;width:100%">
+    <div style="font-size:28px;font-weight:700;color:#fff;margin-bottom:6px"><span style="color:#7c5cfc">Powerplugs</span> Dashboard</div>
+    <div style="font-size:13px;color:#666;margin-bottom:28px">Enter password to continue</div>
+    <input id="authInput" type="password" placeholder="Password" autofocus
+      style="width:100%;padding:12px 16px;background:#16162a;border:1px solid #2a2a3e;border-radius:10px;color:#fff;font-size:15px;outline:none;margin-bottom:12px"
+      onfocus="this.style.borderColor='#7c5cfc'" onblur="this.style.borderColor='#2a2a3e'">
+    <div id="authError" style="color:#ef4444;font-size:12px;margin-bottom:10px;display:none">Incorrect password</div>
+    <button onclick="checkAuth()" style="width:100%;padding:11px;background:#7c5cfc;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Enter</button>
+  </div>
+</div>
+<script>
+// SHA-256 hash of password — not plaintext in source
+const AUTH_HASH = 'ad495a46d5e5e1ac1438b77829ca9b8aec1d30970b1dd0ec3d5008a9e8cec98f';
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function checkAuth() {
+  const input = document.getElementById('authInput').value;
+  const hash = await sha256(input);
+  if (hash === AUTH_HASH) {
+    sessionStorage.setItem('pp_auth', hash);
+    document.getElementById('authGate').style.display = 'none';
+  } else {
+    document.getElementById('authError').style.display = 'block';
+    document.getElementById('authInput').style.borderColor = '#ef4444';
+  }
+}
+document.addEventListener('DOMContentLoaded', async () => {
+  if (sessionStorage.getItem('pp_auth') === AUTH_HASH) {
+    document.getElementById('authGate').style.display = 'none';
+  }
+});
+document.getElementById('authInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkAuth(); });
+</script>
 <div class="header">
   <h1><span>Powerplugs</span> Daily Dashboard</h1>
   <div class="header-meta" style="display:flex;align-items:center;gap:12px">
@@ -1068,11 +1104,17 @@ function renderUserStats() {
     const sumPaid = PLUGS.reduce((s,p) => s + (USER_DATA[p]?.paid||0), 0);
     const sumOnTrial = PLUGS.reduce((s,p) => s + (USER_DATA[p]?.on_trial||0), 0);
     const naiveSum = PLUGS.reduce((s,p) => s + (USER_DATA[p]?.users||0), 0);
-    const displayTotal = naiveSum;
+    const dedupTotal = USER_OVERLAP.total_unique || 0;
+    const displayTotal = dedupTotal > 0 ? dedupTotal : naiveSum;
+    const overlap = dedupTotal > 0 ? (naiveSum - sumOnTrial) - dedupTotal : 0;
+    const overlapPct = dedupTotal > 0 && naiveSum > 0 ? ((overlap / (naiveSum - sumOnTrial)) * 100).toFixed(1) : 0;
+    const dedupLabel = dedupTotal > 0
+      ? `<span style="color:#7c5cfc;font-weight:600">deduplicated paid</span> (${overlap.toLocaleString()} overlap, ${overlapPct}%)`
+      : 'sum across PPs (may overlap)';
     html = `<div class="user-stat-card">
-      <div class="stat-label">Total Active Users</div>
+      <div class="stat-label">Active Unique Users</div>
       <div class="stat-value">${displayTotal.toLocaleString()}</div>
-      <div class="stat-sub">sum across PPs (may overlap) &middot; <span style="color:#4ade80">${sumPaid.toLocaleString()} paid</span>${sumOnTrial > 0 ? ' &middot; <span style="color:#fbbf24">'+sumOnTrial.toLocaleString()+' on trial</span>' : ''}</div>
+      <div class="stat-sub">${dedupLabel}${sumOnTrial > 0 ? ' + <span style="color:#fbbf24">~'+sumOnTrial.toLocaleString()+' on trial</span>' : ''}</div>
       <div class="gender-bar"><div class="male" style="width:${total.male}%"></div><div class="female" style="width:${total.female}%"></div></div>
       <div class="gender-labels"><span class="m">\u2642 ${total.male}%</span><span class="f">\u2640 ${total.female}%</span></div>
     </div>` + html;

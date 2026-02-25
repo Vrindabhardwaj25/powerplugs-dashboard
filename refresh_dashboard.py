@@ -592,42 +592,53 @@ def _hardcoded_user_data():
 
 
 # ============================================================
-# FETCH USER OVERLAP DATA (Snowflake all_purchase - deduplicated users)
+# FETCH USER OVERLAP DATA (active paid users only, deduplicated)
 # ============================================================
 def fetch_user_overlap():
     """
-    Fetches deduplicated user counts across powerplugs from Snowflake all_purchase table.
-    Uses EMAIL as user identifier to find:
-    - True unique user count (deduplicated)
-    - Per-PP unique user count
-    - Multi-PP overlap breakdown (1 PP, 2 PPs, 3+ PPs)
-    - Top multi-PP combos
+    Fetches deduplicated ACTIVE user counts across powerplugs.
+    Only counts users whose last purchase is within their plan's active window:
+    Monthly → 35 days, Yearly → 370 days, 2-Year → 740 days.
+    Uses EMAIL as user identifier.
     """
-    print("Fetching user overlap data via Metabase native query...")
+    print("Fetching active user overlap data via Metabase native query...")
 
     sql = f"""
-    WITH user_plugs AS (
+    WITH user_latest AS (
       SELECT
         EMAIL,
         CASE
           WHEN POWERPLUG_PLAN LIKE 'AFib%' THEN 'AFib'
           WHEN POWERPLUG_PLAN LIKE 'Cardio%' THEN 'Cardio'
-          WHEN POWERPLUG_PLAN LIKE 'CnO%' THEN 'CnO Pro'
-          WHEN POWERPLUG_PLAN LIKE 'respiratory%' THEN 'Respiratory'
-          WHEN POWERPLUG_PLAN LIKE 'tesla%' THEN 'Tesla'
-        END as PP
+          WHEN POWERPLUG_PLAN LIKE 'CnO%' OR POWERPLUG_PLAN LIKE 'cno%' THEN 'CnO Pro'
+          WHEN POWERPLUG_PLAN LIKE 'respiratory%' OR POWERPLUG_PLAN LIKE 'Respiratory%' THEN 'Respiratory'
+          WHEN POWERPLUG_PLAN LIKE 'tesla%' OR POWERPLUG_PLAN LIKE 'Tesla%' THEN 'Tesla'
+          ELSE NULL
+        END as PP,
+        CASE
+          WHEN POWERPLUG_PLAN LIKE '%-monthly' THEN 35
+          WHEN POWERPLUG_PLAN LIKE '%-yearly' OR POWERPLUG_PLAN LIKE '%-1 year' THEN 370
+          WHEN POWERPLUG_PLAN LIKE '%-2 year%' THEN 740
+          ELSE 35
+        END as active_window_days,
+        MAX(TO_DATE(PURCHASE_DATE)) as last_purchase
       FROM "all_purchase"
       WHERE PRODUCT_CATEGORY = 'powerplug'
-        AND TO_DATE(PURCHASE_DATE) >= '{DATA_START_DATE}'
         AND POWERPLUG_PLAN IS NOT NULL
+      GROUP BY 1, 2, 3
+    ),
+    active_paid AS (
+      SELECT EMAIL, PP
+      FROM user_latest
+      WHERE PP IS NOT NULL
+        AND last_purchase >= DATEADD('day', -active_window_days, CURRENT_DATE())
     ),
     per_user AS (
       SELECT
         EMAIL,
         COUNT(DISTINCT PP) as num_pps,
         LISTAGG(DISTINCT PP, ' + ') WITHIN GROUP (ORDER BY PP) as combo
-      FROM user_plugs
-      WHERE PP IS NOT NULL
+      FROM active_paid
       GROUP BY EMAIL
     ),
     overlap_counts AS (
@@ -641,11 +652,11 @@ def fetch_user_overlap():
     ),
     pp_unique AS (
       SELECT PP, COUNT(DISTINCT EMAIL) as unique_users
-      FROM user_plugs WHERE PP IS NOT NULL
+      FROM active_paid
       GROUP BY PP
     ),
     total_unique AS (
-      SELECT COUNT(DISTINCT EMAIL) as total FROM user_plugs WHERE PP IS NOT NULL
+      SELECT COUNT(DISTINCT EMAIL) as total FROM active_paid
     )
     SELECT 'overlap' as qtype, CAST(num_pps AS VARCHAR) as key1, NULL as key2, user_count as val FROM overlap_counts
     UNION ALL
