@@ -101,6 +101,63 @@ app.get('/auth/logout', (req, res) => {
   req.logout(() => res.redirect('/auth/login'));
 });
 
+// --- Refresh API: triggers GitHub Actions to pull fresh Metabase data ---
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_REPO = 'Vrindabhardwaj25/powerplugs-dashboard';
+
+app.use(express.json());
+
+app.post('/api/trigger-refresh', requireAuth, async (req, res) => {
+  if (!GITHUB_TOKEN) {
+    return res.status(500).json({ error: 'GITHUB_TOKEN not configured on server' });
+  }
+  try {
+    // Trigger the workflow_dispatch event
+    const resp = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/refresh.yml/dispatches`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GITHUB_TOKEN}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ref: 'main' }),
+    });
+    if (resp.status === 204) {
+      return res.json({ ok: true, message: 'Workflow triggered. Dashboard will update in ~2-3 minutes.' });
+    }
+    const body = await resp.text();
+    return res.status(resp.status).json({ error: `GitHub API returned ${resp.status}`, details: body });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Check workflow run status
+app.get('/api/refresh-status', requireAuth, async (req, res) => {
+  if (!GITHUB_TOKEN) {
+    return res.status(500).json({ error: 'GITHUB_TOKEN not configured' });
+  }
+  try {
+    const resp = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/refresh.yml/runs?per_page=1`, {
+      headers: {
+        'Authorization': `Bearer ${GITHUB_TOKEN}`,
+        'Accept': 'application/vnd.github.v3+json',
+      },
+    });
+    const data = await resp.json();
+    const run = data.workflow_runs?.[0];
+    if (!run) return res.json({ status: 'unknown' });
+    return res.json({
+      status: run.status,           // queued, in_progress, completed
+      conclusion: run.conclusion,   // success, failure, null
+      started_at: run.run_started_at,
+      updated_at: run.updated_at,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Protected dashboard ---
 app.get('/', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));

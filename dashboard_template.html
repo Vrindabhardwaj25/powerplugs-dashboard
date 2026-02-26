@@ -578,12 +578,85 @@ function refreshDashboard() {
     document.head.appendChild(style);
   }
 
-  // Force a hard reload — append cache-busting timestamp to bypass CDN/browser cache
-  setTimeout(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('_t', Date.now());
-    window.location.href = url.toString();
-  }, 300);
+  // Show status message
+  let statusEl = document.getElementById('refreshStatus');
+  if (!statusEl) {
+    statusEl = document.createElement('span');
+    statusEl.id = 'refreshStatus';
+    statusEl.style.cssText = 'font-size:11px;color:#7c5cfc;margin-left:4px';
+    btn.parentElement.insertBefore(statusEl, btn.nextSibling);
+  }
+  statusEl.textContent = 'Triggering data refresh...';
+
+  // Trigger GitHub Actions workflow to pull fresh Metabase data
+  fetch('/api/trigger-refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        statusEl.textContent = 'Refreshing data — will reload in ~2 min...';
+        // Poll for workflow completion then reload
+        pollRefreshStatus(statusEl, btn, icon);
+      } else {
+        // Fallback: just hard reload the page
+        statusEl.textContent = data.error || 'Trigger failed — reloading page...';
+        setTimeout(() => {
+          const url = new URL(window.location.href);
+          url.searchParams.set('_t', Date.now());
+          window.location.href = url.toString();
+        }, 1500);
+      }
+    })
+    .catch(() => {
+      // Fallback: hard reload
+      statusEl.textContent = 'Reloading page...';
+      setTimeout(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('_t', Date.now());
+        window.location.href = url.toString();
+      }, 500);
+    });
+}
+
+function pollRefreshStatus(statusEl, btn, icon) {
+  let polls = 0;
+  const maxPolls = 40; // ~3.3 minutes max (40 × 5s)
+  const interval = setInterval(() => {
+    polls++;
+    fetch('/api/refresh-status').then(r => r.json()).then(data => {
+      if (data.status === 'completed') {
+        clearInterval(interval);
+        if (data.conclusion === 'success') {
+          statusEl.textContent = 'Data refreshed! Reloading...';
+          statusEl.style.color = '#22c55e';
+          // Wait for Render to redeploy (it auto-deploys on git push) — ~30s
+          setTimeout(() => {
+            const url = new URL(window.location.href);
+            url.searchParams.set('_t', Date.now());
+            window.location.href = url.toString();
+          }, 35000);
+        } else {
+          statusEl.textContent = 'Refresh failed — reloading page...';
+          statusEl.style.color = '#ef4444';
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            icon.style.animation = '';
+          }, 3000);
+        }
+      } else if (polls >= maxPolls) {
+        clearInterval(interval);
+        statusEl.textContent = 'Taking longer than expected — reloading...';
+        setTimeout(() => {
+          const url = new URL(window.location.href);
+          url.searchParams.set('_t', Date.now());
+          window.location.href = url.toString();
+        }, 2000);
+      } else {
+        const elapsed = polls * 5;
+        statusEl.textContent = `Pulling fresh data... (${elapsed}s)`;
+      }
+    }).catch(() => {});
+  }, 5000);
 }
 
 // ============================================================
