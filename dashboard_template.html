@@ -607,7 +607,7 @@ const COLORS = {
   'All':         { border: '#7c5cfc', fill: 'rgba(124,92,252,0.08)' },
 };
 
-const COUNTRIES = ['USA','India','Canada','UK + IR','Australia','Germany','UAE','Czech Republic','Thailand','Switzerland','Spain','Netherlands','Singapore','Philippines','France','Mexico','Poland','Saudi Arabia','Austria','Italy','Belgium','New Zealand','Taiwan'];
+const COUNTRIES = ['USA','India','Canada','UK + IR','Australia','Germany','UAE','Czech Republic','Thailand','Switzerland','Spain','Netherlands','Singapore','Philippines','France','Mexico','Poland','Saudi Arabia','Austria','Italy','Belgium','New Zealand','Taiwan','Bosnia and Herzegovina','Moldova','Albania'];
 
 // ============================================================
 // GOOGLE SHEETS CONFIG (injected by refresh_dashboard.py)
@@ -2598,7 +2598,7 @@ function getDefaultCountryData() {
   // C&O Pro: US, UK, AU, CA, EU only — MUTUALLY EXCLUSIVE with C&O Plus
   const cnoProCountries = ['USA','UK + IR','Australia','Canada','Germany','Czech Republic','Spain','Netherlands','Switzerland','France','Poland','Austria','Italy','Belgium'];
   // C&O Plus: all non-CnO Pro countries (C&O Pro & Plus are mutually exclusive)
-  const cnoPlusCountries = ['India','UAE','Thailand','Singapore','Philippines','Mexico','Saudi Arabia','New Zealand','Taiwan'];
+  const cnoPlusCountries = ['India','UAE','Thailand','Singapore','Philippines','Mexico','Saudi Arabia','New Zealand','Taiwan','Bosnia and Herzegovina','Moldova','Albania'];
   // Respiratory: available globally (validated from all_purchase, all 23 countries have ≥11 unique users)
   const respiratoryCountries = ['USA','India','Canada','UK + IR','Australia','Germany','UAE','Czech Republic','Thailand','Switzerland','Spain','Netherlands','Singapore','Philippines','France','Mexico','Poland','Saudi Arabia','Austria','Italy','Belgium','New Zealand','Taiwan'];
   // Tesla: countries with ≥1 unique user (validated from all_purchase Feb 2026; not in Netherlands, Belgium, Taiwan)
