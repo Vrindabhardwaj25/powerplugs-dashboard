@@ -1087,7 +1087,8 @@ function renderKPIs() {
   }
 
   // Total unique paid users (from all_purchase — everyone in this table has purchased)
-  const totalPaidUsers = plugs.reduce((s,p) => s + (USER_DATA[p]?.paid || 0), 0);
+  const uData = getFilteredUserData();
+  const totalPaidUsers = plugs.reduce((s,p) => s + (uData[p]?.paid || 0), 0);
 
   // ARPU = Total Revenue / Total Paid Users
   const arpu = totalPaidUsers > 0 ? (totalRev / totalPaidUsers).toFixed(2) : '\u2014';
@@ -1355,15 +1356,39 @@ function renderAlerts() {
 // ============================================================
 // User data (injected by refresh_dashboard.py)
 const USER_DATA = /*__USER_DATA__*/{};
+const COUNTRY_USER_DATA = /*__COUNTRY_USER_DATA__*/{};
+
+function getFilteredUserData() {
+  // If country filter is set (not "All"), return country-specific data
+  if (!currentCountry || currentCountry === 'All') return USER_DATA;
+  const countryName = countryCodeToName(currentCountry);
+  if (!COUNTRY_USER_DATA[countryName]) return USER_DATA;
+  // Build a USER_DATA-shaped object for the selected country
+  const cdata = COUNTRY_USER_DATA[countryName];
+  const result = {};
+  let gm = 0, gf = 0, gt = 0;
+  for (const pp of PLUGS) {
+    const d = cdata[pp] || { paid: 0, on_trial: 0, users: 0, male: 0, female: 0 };
+    result[pp] = d;
+    gm += d.male * d.users / 100;
+    gf += d.female * d.users / 100;
+    gt += d.users;
+  }
+  const ggt = gt || 1;
+  result['_total'] = { users: 0, male: Math.round(gm / ggt * 100), female: Math.round(gf / ggt * 100) };
+  return result;
+}
 
 function renderUserStats() {
   const container = document.getElementById('userStatsGrid');
   const overlapSection = document.getElementById('userOverlapSection');
   const plugs = getPlugs();
+  const uData = getFilteredUserData();
+  const isCountryFiltered = uData !== USER_DATA;
   let html = '';
 
   plugs.forEach(p => {
-    const ud = USER_DATA[p] || { users: 0, paid: 0, on_trial: 0, male: 50, female: 50 };
+    const ud = uData[p] || { users: 0, paid: 0, on_trial: 0, male: 50, female: 50 };
     const onTrial = ud.on_trial || Math.max(0, ud.users - (ud.paid || 0));
     html += `<div class="user-stat-card">
       <div class="stat-label">${displayName(p)}</div>
@@ -1374,21 +1399,27 @@ function renderUserStats() {
     </div>`;
   });
 
-  // If showing all, show true deduplicated total from USER_OVERLAP
+  // If showing all, show true deduplicated total from USER_OVERLAP (only for global, not country-filtered)
   if (plugs.length > 1) {
-    const total = USER_DATA['_total'] || { users: 0, male: 50, female: 50 };
-    const sumPaid = PLUGS.reduce((s,p) => s + (USER_DATA[p]?.paid||0), 0);
-    const sumOnTrial = PLUGS.reduce((s,p) => s + (USER_DATA[p]?.on_trial||0), 0);
-    const naiveSum = PLUGS.reduce((s,p) => s + (USER_DATA[p]?.users||0), 0);
-    const dedupTotal = USER_OVERLAP.total_unique || 0;
-    const displayTotal = dedupTotal > 0 ? dedupTotal : naiveSum;
-    const overlap = dedupTotal > 0 ? (naiveSum - sumOnTrial) - dedupTotal : 0;
-    const overlapPct = dedupTotal > 0 && naiveSum > 0 ? ((overlap / (naiveSum - sumOnTrial)) * 100).toFixed(1) : 0;
-    const dedupLabel = dedupTotal > 0
-      ? `<span style="color:#7c5cfc;font-weight:600">deduplicated paid</span> (${overlap.toLocaleString()} overlap, ${overlapPct}%)`
-      : 'sum across PPs (may overlap)';
+    const total = uData['_total'] || { users: 0, male: 50, female: 50 };
+    const sumPaid = PLUGS.reduce((s,p) => s + (uData[p]?.paid||0), 0);
+    const sumOnTrial = PLUGS.reduce((s,p) => s + (uData[p]?.on_trial||0), 0);
+    const naiveSum = PLUGS.reduce((s,p) => s + (uData[p]?.users||0), 0);
+    let displayTotal, dedupLabel;
+    if (!isCountryFiltered) {
+      const dedupTotal = USER_OVERLAP.total_unique || 0;
+      displayTotal = dedupTotal > 0 ? dedupTotal : naiveSum;
+      const overlap = dedupTotal > 0 ? (naiveSum - sumOnTrial) - dedupTotal : 0;
+      const overlapPct = dedupTotal > 0 && naiveSum > 0 ? ((overlap / (naiveSum - sumOnTrial)) * 100).toFixed(1) : 0;
+      dedupLabel = dedupTotal > 0
+        ? `<span style="color:#7c5cfc;font-weight:600">deduplicated paid</span> (${overlap.toLocaleString()} overlap, ${overlapPct}%)`
+        : 'sum across PPs (may overlap)';
+    } else {
+      displayTotal = naiveSum;
+      dedupLabel = 'sum across PPs (may overlap)';
+    }
     html = `<div class="user-stat-card">
-      <div class="stat-label">Active Unique Users</div>
+      <div class="stat-label">Active Unique Users${isCountryFiltered ? ' <span style="color:#7c5cfc;font-size:10px">(filtered)</span>' : ''}</div>
       <div class="stat-value">${displayTotal.toLocaleString()}</div>
       <div class="stat-sub">${dedupLabel}${sumOnTrial > 0 ? ' + <span style="color:#fbbf24">~'+sumOnTrial.toLocaleString()+' on trial</span>' : ''}</div>
       <div class="gender-bar"><div class="male" style="width:${total.male}%"></div><div class="female" style="width:${total.female}%"></div></div>
@@ -1398,8 +1429,14 @@ function renderUserStats() {
 
   container.innerHTML = html;
 
-  // Render overlap visualization
-  if (overlapSection) renderUserOverlap(overlapSection);
+  // Render overlap visualization (only for global view)
+  if (overlapSection) {
+    if (isCountryFiltered) {
+      overlapSection.innerHTML = '';
+    } else {
+      renderUserOverlap(overlapSection);
+    }
+  }
 }
 
 function renderUserOverlap(container) {

@@ -582,6 +582,220 @@ def fetch_user_data():
     return user_data
 
 
+def fetch_country_user_data():
+    """
+    Fetches per-country userbase data so the dashboard JS can filter by country.
+    Uses:
+      1. Snowflake all_purchase + geo_data_nr_mp for active paid subscribers by country
+      2. Card 19529 (RevCat) with COUNTRY breakout for trial users + gender by country
+    Returns dict: { country: { pp: { paid, on_trial, users, male%, female% } } }
+    """
+    print("Fetching country-level user data...")
+
+    # ---- Part 1: Active paid by country from Snowflake ----
+    print("  [1/3] Active paid subscribers by country...")
+    paid_country_sql = f"""
+    WITH uid_map AS (
+      SELECT DISTINCT "original_user_id" AS uid, "id" AS user_id, "email"
+      FROM "users"
+      WHERE "original_user_id" IS NOT NULL
+    ),
+    geo AS (
+      SELECT bb.user_id, bb."email",
+        COALESCE(d."name", f.COUNTRY) as country_name
+      FROM "geo_data_nr_mp" f
+      LEFT JOIN uid_map bb ON bb.uid = f."USER_ID"
+      LEFT JOIN "country_code_mapping" d ON f.COUNTRY = d."country_code"
+      QUALIFY ROW_NUMBER() OVER(PARTITION BY bb.user_id ORDER BY f."TIMESTAMP" DESC) = 1
+    ),
+    user_latest AS (
+      SELECT
+        ap.EMAIL,
+        CASE
+          WHEN POWERPLUG_PLAN LIKE 'AFib%' THEN 'AFib'
+          WHEN POWERPLUG_PLAN LIKE 'Cardio%' THEN 'Cardio'
+          WHEN POWERPLUG_PLAN LIKE 'CnO%' OR POWERPLUG_PLAN LIKE 'cno%' THEN 'CnO Pro'
+          WHEN POWERPLUG_PLAN LIKE 'respiratory%' OR POWERPLUG_PLAN LIKE 'Respiratory%' THEN 'Respiratory'
+          WHEN POWERPLUG_PLAN LIKE 'tesla%' OR POWERPLUG_PLAN LIKE 'Tesla%' THEN 'Tesla'
+          ELSE NULL
+        END as PP,
+        CASE
+          WHEN POWERPLUG_PLAN LIKE '%-monthly' THEN 35
+          WHEN POWERPLUG_PLAN LIKE '%-yearly' OR POWERPLUG_PLAN LIKE '%-1 year' THEN 370
+          WHEN POWERPLUG_PLAN LIKE '%-2 year%' THEN 740
+          ELSE 35
+        END as active_window_days,
+        MAX(TO_DATE(PURCHASE_DATE)) as last_purchase
+      FROM "all_purchase" ap
+      WHERE PRODUCT_CATEGORY = 'powerplug'
+        AND POWERPLUG_PLAN IS NOT NULL
+      GROUP BY 1, 2, 3
+    ),
+    active_paid AS (
+      SELECT EMAIL, PP
+      FROM user_latest
+      WHERE PP IS NOT NULL
+        AND last_purchase >= DATEADD('day', -active_window_days, CURRENT_DATE())
+    )
+    SELECT COALESCE(g.country_name, 'Unknown') as country, ap.PP,
+           COUNT(DISTINCT ap.EMAIL) as active_paid
+    FROM active_paid ap
+    LEFT JOIN geo g ON LOWER(ap.EMAIL) = LOWER(g."email")
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+    """
+
+    paid_by_country_pp = defaultdict(lambda: defaultdict(int))
+    try:
+        result = mb_post('dataset', {
+            'database': TRIAL_DATABASE_ID,
+            'type': 'native',
+            'native': {'query': paid_country_sql},
+        })
+        rows = result.get('data', {}).get('rows', [])
+        print(f"    Got {len(rows)} rows")
+        for r in rows:
+            raw_country = (r[0] or 'Unknown').strip()
+            country = COUNTRY_MAP.get(raw_country.lower(), None)
+            pp = r[1]
+            count = int(r[2] or 0)
+            if country and pp in PLUGS:
+                paid_by_country_pp[country][pp] += count
+            elif pp in PLUGS:
+                # Countries not in our map go to 'Other'
+                paid_by_country_pp['Other'][pp] += count
+    except Exception as e:
+        print(f"    WARNING: Failed to fetch paid by country: {e}")
+
+    # ---- Part 2: Trial users by country from card 19529 ----
+    print("  [2/3] Trial users by country...")
+    trial_windows = {
+        'cno_pro_n_plus': 30,
+        'afib': 7,
+        'cardio': 7,
+        'respiratory': 7,
+        'tesla': 7,
+    }
+    trial_by_country_pp = defaultdict(lambda: defaultdict(int))
+    for pp_raw, window in trial_windows.items():
+        pp = PP_MAP.get(pp_raw)
+        if not pp:
+            continue
+        query = {
+            'database': TRIAL_DATABASE_ID,
+            'type': 'query',
+            'query': {
+                'source-table': f'card__{TRIAL_SOURCE_CARD_ID}',
+                'aggregation': [
+                    ['sum', ['field', 'NUM_TRIAL_USERS', {'base-type': 'type/Integer'}]],
+                    ['sum', ['field', 'SUM_CONVERTED_USERS', {'base-type': 'type/Integer'}]],
+                ],
+                'breakout': [
+                    ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}],
+                    ['field', 'COUNTRY', {'base-type': 'type/Text'}],
+                ],
+                'filter': [
+                    'and',
+                    ['=', ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}], pp_raw],
+                    ['>=', ['field', 'TRIAL_DATE', {'base-type': 'type/Date'}],
+                     ['relative-datetime', -window, 'day']],
+                ],
+            },
+        }
+        try:
+            result = mb_post('dataset', query)
+            rows = result.get('data', {}).get('rows', [])
+            for r in rows:
+                raw_country = (r[1] or 'Unknown').strip()
+                country = COUNTRY_MAP.get(raw_country.lower(), None)
+                trials = int(r[2] or 0)
+                converted = int(r[3] or 0)
+                on_trial = max(0, trials - converted)
+                if country:
+                    trial_by_country_pp[country][pp] += on_trial
+                else:
+                    trial_by_country_pp['Other'][pp] += on_trial
+        except Exception as e:
+            print(f"    WARNING: Failed trial by country for {pp}: {e}")
+
+    # ---- Part 3: Gender split by country from card 19529 ----
+    print("  [3/3] Gender split by country...")
+    gender_query = {
+        'database': TRIAL_DATABASE_ID,
+        'type': 'query',
+        'query': {
+            'source-table': f'card__{TRIAL_SOURCE_CARD_ID}',
+            'aggregation': [
+                ['sum', ['field', 'NUM_TRIAL_USERS', {'base-type': 'type/Integer'}]],
+            ],
+            'breakout': [
+                ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}],
+                ['field', 'COUNTRY', {'base-type': 'type/Text'}],
+                ['field', 'GENDER', {'base-type': 'type/Text'}],
+            ],
+            'filter': [
+                'between',
+                ['field', 'TRIAL_DATE', {'base-type': 'type/Date'}],
+                DATA_START_DATE,
+                datetime.now().strftime('%Y-%m-%d'),
+            ],
+        },
+    }
+    # gender_data[country][pp] = {male: N, female: N, other: N, total: N}
+    gender_data = defaultdict(lambda: defaultdict(lambda: {'male': 0, 'female': 0, 'other': 0, 'total': 0}))
+    try:
+        result = mb_post('dataset', gender_query)
+        rows = result.get('data', {}).get('rows', [])
+        print(f"    Got {len(rows)} gender rows")
+        for r in rows:
+            pp_raw = (r[0] or '').lower()
+            raw_country = (r[1] or 'Unknown').strip()
+            gender = (r[2] or '').lower()
+            count = int(r[3] or 0)
+            pp = PP_MAP.get(pp_raw)
+            country = COUNTRY_MAP.get(raw_country.lower(), None)
+            if not pp or not country:
+                continue
+            gender_data[country][pp]['total'] += count
+            if gender == 'male':
+                gender_data[country][pp]['male'] += count
+            elif gender == 'female':
+                gender_data[country][pp]['female'] += count
+            else:
+                gender_data[country][pp]['other'] += count
+    except Exception as e:
+        print(f"    WARNING: Failed gender by country: {e}")
+
+    # ---- Build output ----
+    all_countries = set(list(paid_by_country_pp.keys()) + list(trial_by_country_pp.keys()))
+    country_user_data = {}
+    for country in sorted(all_countries):
+        if country == 'Other':
+            continue
+        country_user_data[country] = {}
+        for pp in PLUGS:
+            paid = paid_by_country_pp[country].get(pp, 0)
+            on_trial = trial_by_country_pp[country].get(pp, 0)
+            gd = gender_data[country][pp]
+            gt = gd['total'] or 1
+            male_pct = round(gd['male'] / gt * 100)
+            female_pct = round(gd['female'] / gt * 100)
+            country_user_data[country][pp] = {
+                'paid': paid,
+                'on_trial': on_trial,
+                'users': paid + on_trial,
+                'male': male_pct,
+                'female': female_pct,
+            }
+
+    print(f"  Country user data for {len(country_user_data)} countries")
+    for c in list(sorted(country_user_data.keys()))[:5]:
+        total = sum(d['users'] for d in country_user_data[c].values())
+        print(f"    {c}: {total:,} total active")
+
+    return country_user_data
+
+
 def _hardcoded_user_data():
     """Fallback hardcoded user data."""
     return {
@@ -1087,7 +1301,7 @@ def fetch_country_revenue():
 # ============================================================
 # TEMPLATE INJECTION
 # ============================================================
-def inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, user_overlap, cumulative_users, plan_mix):
+def inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, user_overlap, cumulative_users, plan_mix, country_user_data=None):
     """Replace placeholder tokens in the template with real data."""
     print("Injecting data into template...")
 
@@ -1102,6 +1316,7 @@ def inject_data(template, revenue_data, purchase_data, trial_data, user_data, co
     output = output.replace('/*__USER_OVERLAP__*/{}', json.dumps(user_overlap, separators=(',', ':')))
     output = output.replace('/*__CUMULATIVE_USERS__*/{}', json.dumps(cumulative_users, separators=(',', ':')))
     output = output.replace('/*__PLAN_MIX__*/{}', json.dumps(plan_mix, separators=(',', ':')))
+    output = output.replace('/*__COUNTRY_USER_DATA__*/{}', json.dumps(country_user_data or {}, separators=(',', ':')))
     output = output.replace('/*__LAST_UPDATED__*/', now)
 
     # Google Sheets config
@@ -1157,9 +1372,10 @@ def main():
     user_overlap = fetch_user_overlap()
     cumulative_users = fetch_cumulative_users()
     plan_mix = fetch_plan_mix()
+    country_user_data = fetch_country_user_data()
 
     # Inject into template
-    output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, user_overlap, cumulative_users, plan_mix)
+    output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, user_overlap, cumulative_users, plan_mix, country_user_data)
 
     # Write output
     OUTPUT_FILE.write_text(output)
