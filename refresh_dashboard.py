@@ -403,7 +403,7 @@ def fetch_user_data():
     paid_sql = f"""
     WITH user_latest AS (
       SELECT
-        EMAIL,
+        ap.EMAIL,
         CASE
           WHEN POWERPLUG_PLAN LIKE 'AFib%' THEN 'AFib'
           WHEN POWERPLUG_PLAN LIKE 'Cardio%' THEN 'Cardio'
@@ -419,16 +419,18 @@ def fetch_user_data():
           ELSE 35
         END as active_window_days,
         MAX(TO_DATE(PURCHASE_DATE)) as last_purchase
-      FROM "all_purchase"
+      FROM "all_purchase" ap
       WHERE PRODUCT_CATEGORY = 'powerplug'
         AND POWERPLUG_PLAN IS NOT NULL
       GROUP BY 1, 2, 3
     ),
     active_paid AS (
-      SELECT EMAIL, PP
-      FROM user_latest
-      WHERE PP IS NOT NULL
-        AND last_purchase >= DATEADD('day', -active_window_days, CURRENT_DATE())
+      SELECT ul.EMAIL, ul.PP
+      FROM user_latest ul
+      LEFT JOIN "users" u ON LOWER(ul.EMAIL) = LOWER(u."email")
+      WHERE ul.PP IS NOT NULL
+        AND ul.last_purchase >= DATEADD('day', -active_window_days, CURRENT_DATE())
+        AND (ul.PP != 'CnO Pro' OR COALESCE(u."gender", 1) != 0)
     )
     SELECT PP, COUNT(DISTINCT EMAIL) as active_paid
     FROM active_paid
@@ -471,6 +473,16 @@ def fetch_user_data():
         pp = PP_MAP.get(pp_raw)
         if not pp:
             continue
+        # Base filter: powerplug type + recent trial window
+        filters = [
+            'and',
+            ['=', ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}], pp_raw],
+            ['>=', ['field', 'TRIAL_DATE', {'base-type': 'type/Date'}],
+             ['relative-datetime', -window, 'day']],
+        ]
+        # C&O Pro: exclude male users (female + others only)
+        if pp_raw == 'cno_pro_n_plus':
+            filters.append(['!=', ['field', 'GENDER', {'base-type': 'type/Text'}], 'male'])
         query = {
             'database': TRIAL_DATABASE_ID,
             'type': 'query',
@@ -483,12 +495,7 @@ def fetch_user_data():
                 'breakout': [
                     ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}],
                 ],
-                'filter': [
-                    'and',
-                    ['=', ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}], pp_raw],
-                    ['>=', ['field', 'TRIAL_DATE', {'base-type': 'type/Date'}],
-                     ['relative-datetime', -window, 'day']],
-                ],
+                'filter': filters,
             },
         }
         try:
@@ -537,8 +544,11 @@ def fetch_user_data():
             pp = PP_MAP.get(pp_raw.lower() if pp_raw else '', None)
             if not pp:
                 continue
-            gender_by_pp[pp]['total'] += count
             g = (gender or '').lower()
+            # C&O Pro: exclude male users (female + others only)
+            if pp == 'CnO Pro' and g == 'male':
+                continue
+            gender_by_pp[pp]['total'] += count
             if g == 'male':
                 gender_by_pp[pp]['male'] += count
             elif g == 'female':
@@ -632,10 +642,12 @@ def fetch_country_user_data():
       GROUP BY 1, 2, 3
     ),
     active_paid AS (
-      SELECT EMAIL, PP
-      FROM user_latest
-      WHERE PP IS NOT NULL
-        AND last_purchase >= DATEADD('day', -active_window_days, CURRENT_DATE())
+      SELECT ul.EMAIL, ul.PP
+      FROM user_latest ul
+      LEFT JOIN "users" u ON LOWER(ul.EMAIL) = LOWER(u."email")
+      WHERE ul.PP IS NOT NULL
+        AND ul.last_purchase >= DATEADD('day', -active_window_days, CURRENT_DATE())
+        AND (ul.PP != 'CnO Pro' OR COALESCE(u."gender", 1) != 0)
     )
     SELECT COALESCE(g.country_name, 'Unknown') as country, ap.PP,
            COUNT(DISTINCT ap.EMAIL) as active_paid
@@ -681,6 +693,16 @@ def fetch_country_user_data():
         pp = PP_MAP.get(pp_raw)
         if not pp:
             continue
+        # Base filter
+        filters = [
+            'and',
+            ['=', ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}], pp_raw],
+            ['>=', ['field', 'TRIAL_DATE', {'base-type': 'type/Date'}],
+             ['relative-datetime', -window, 'day']],
+        ]
+        # C&O Pro: exclude male users
+        if pp_raw == 'cno_pro_n_plus':
+            filters.append(['!=', ['field', 'GENDER', {'base-type': 'type/Text'}], 'male'])
         query = {
             'database': TRIAL_DATABASE_ID,
             'type': 'query',
@@ -694,12 +716,7 @@ def fetch_country_user_data():
                     ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}],
                     ['field', 'COUNTRY', {'base-type': 'type/Text'}],
                 ],
-                'filter': [
-                    'and',
-                    ['=', ['field', 'POWERPLUG_TYPE', {'base-type': 'type/Text'}], pp_raw],
-                    ['>=', ['field', 'TRIAL_DATE', {'base-type': 'type/Date'}],
-                     ['relative-datetime', -window, 'day']],
-                ],
+                'filter': filters,
             },
         }
         try:
@@ -755,6 +772,9 @@ def fetch_country_user_data():
             pp = PP_MAP.get(pp_raw)
             country = COUNTRY_MAP.get(raw_country.lower(), None)
             if not pp or not country:
+                continue
+            # C&O Pro: exclude male users
+            if pp == 'CnO Pro' and gender == 'male':
                 continue
             gender_data[country][pp]['total'] += count
             if gender == 'male':
@@ -823,7 +843,7 @@ def fetch_user_overlap():
     sql = f"""
     WITH user_latest AS (
       SELECT
-        EMAIL,
+        ap.EMAIL,
         CASE
           WHEN POWERPLUG_PLAN LIKE 'AFib%' THEN 'AFib'
           WHEN POWERPLUG_PLAN LIKE 'Cardio%' THEN 'Cardio'
@@ -839,16 +859,18 @@ def fetch_user_overlap():
           ELSE 35
         END as active_window_days,
         MAX(TO_DATE(PURCHASE_DATE)) as last_purchase
-      FROM "all_purchase"
+      FROM "all_purchase" ap
       WHERE PRODUCT_CATEGORY = 'powerplug'
         AND POWERPLUG_PLAN IS NOT NULL
       GROUP BY 1, 2, 3
     ),
     active_paid AS (
-      SELECT EMAIL, PP
-      FROM user_latest
-      WHERE PP IS NOT NULL
-        AND last_purchase >= DATEADD('day', -active_window_days, CURRENT_DATE())
+      SELECT ul.EMAIL, ul.PP
+      FROM user_latest ul
+      LEFT JOIN "users" u ON LOWER(ul.EMAIL) = LOWER(u."email")
+      WHERE ul.PP IS NOT NULL
+        AND ul.last_purchase >= DATEADD('day', -active_window_days, CURRENT_DATE())
+        AND (ul.PP != 'CnO Pro' OR COALESCE(u."gender", 1) != 0)
     ),
     per_user AS (
       SELECT
