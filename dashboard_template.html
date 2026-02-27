@@ -230,6 +230,7 @@ fetch('/auth/user').then(r=>r.ok?r.json():null).then(u=>{
 <div class="tab-bar">
   <button class="tab-btn active" onclick="switchTab('dashboard')">Dashboard</button>
   <button class="tab-btn" onclick="switchTab('countries')">Active Countries</button>
+  <button class="tab-btn" onclick="switchTab('subscriptions')">Subscription Structure</button>
   <button class="tab-btn" onclick="switchTab('emails')">Campaigns</button>
 </div>
 
@@ -347,7 +348,284 @@ fetch('/auth/user').then(r=>r.ok?r.json():null).then(u=>{
   </div>
 </div>
 
-<!-- ============ TAB 3: CAMPAIGNS ============ -->
+<!-- ============ TAB 3: SUBSCRIPTION STRUCTURE ============ -->
+<div id="tab-subscriptions" class="tab-content">
+  <div class="countries-section">
+    <h2>Powerplug Subscription Structure</h2>
+    <div class="subtitle">Pricing across currencies and trial periods for each powerplug</div>
+
+    <!-- Trial Periods -->
+    <div style="margin:24px 0 20px">
+      <h3 style="color:#fff;font-size:16px;margin-bottom:14px">Trial Periods</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:1px solid #2a2a3e">
+            <th style="text-align:left;padding:10px 12px;color:#888;font-weight:600">Powerplug</th>
+            <th style="text-align:center;padding:10px 12px;color:#888;font-weight:600">Monthly</th>
+            <th style="text-align:center;padding:10px 12px;color:#888;font-weight:600">Yearly</th>
+            <th style="text-align:center;padding:10px 12px;color:#888;font-weight:600">2-Year</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #1a1a2e">
+            <td style="padding:10px 12px;color:#fff;font-weight:600">🫀 Cardio Adaptability</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">3-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">14-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#555">—</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1a1a2e;background:rgba(255,255,255,0.02)">
+            <td style="padding:10px 12px;color:#fff;font-weight:600">💗 AFib</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">3-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">14-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#555">—</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1a1a2e">
+            <td style="padding:10px 12px;color:#fff;font-weight:600">🫁 Respiratory Health</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">7-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">14-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#555">—</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1a1a2e;background:rgba(255,255,255,0.02)">
+            <td style="padding:10px 12px;color:#fff;font-weight:600">🔄 CnO Plus</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">7-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">30-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#555">—</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1a1a2e">
+            <td style="padding:10px 12px;color:#fff;font-weight:600">🔬 CnO Pro</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">7-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">30-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#555">—</td>
+          </tr>
+          <tr style="background:rgba(255,255,255,0.02)">
+            <td style="padding:10px 12px;color:#fff;font-weight:600">⚡ Tesla</td>
+            <td style="text-align:center;padding:10px 12px;color:#e0e0e0">7-day trial</td>
+            <td style="text-align:center;padding:10px 12px;color:#555">—</td>
+            <td style="text-align:center;padding:10px 12px;color:#555">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pricing Tables -->
+    <div style="margin:30px 0 20px">
+      <h3 style="color:#fff;font-size:16px;margin-bottom:14px">Pricing by Currency</h3>
+
+      <!-- Cardio Adaptability -->
+      <div style="margin-bottom:24px">
+        <h4 style="color:#7c5cfc;font-size:14px;margin-bottom:10px">🫀 Cardio Adaptability</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid #2a2a3e">
+              <th style="text-align:left;padding:8px 12px;color:#888;font-weight:600">Plan</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">USD 🇺🇸</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">INR 🇮🇳</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">AED 🇦🇪</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">GBP 🇬🇧</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">EUR 🇪🇺</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #1a1a2e">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Monthly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cardio-monthly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cardio-monthly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cardio-monthly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cardio-monthly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cardio-monthly-eur">—</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1a2e;background:rgba(255,255,255,0.02)">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Yearly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cardio-yearly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cardio-yearly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cardio-yearly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cardio-yearly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cardio-yearly-eur">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- AFib -->
+      <div style="margin-bottom:24px">
+        <h4 style="color:#7c5cfc;font-size:14px;margin-bottom:10px">💗 AFib</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid #2a2a3e">
+              <th style="text-align:left;padding:8px 12px;color:#888;font-weight:600">Plan</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">USD 🇺🇸</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">INR 🇮🇳</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">AED 🇦🇪</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">GBP 🇬🇧</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">EUR 🇪🇺</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #1a1a2e">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Monthly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="afib-monthly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="afib-monthly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="afib-monthly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="afib-monthly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="afib-monthly-eur">—</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1a2e;background:rgba(255,255,255,0.02)">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Yearly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="afib-yearly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="afib-yearly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="afib-yearly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="afib-yearly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="afib-yearly-eur">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Respiratory Health -->
+      <div style="margin-bottom:24px">
+        <h4 style="color:#7c5cfc;font-size:14px;margin-bottom:10px">🫁 Respiratory Health</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid #2a2a3e">
+              <th style="text-align:left;padding:8px 12px;color:#888;font-weight:600">Plan</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">USD 🇺🇸</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">INR 🇮🇳</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">AED 🇦🇪</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">GBP 🇬🇧</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">EUR 🇪🇺</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #1a1a2e">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Monthly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="resp-monthly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="resp-monthly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="resp-monthly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="resp-monthly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="resp-monthly-eur">—</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1a2e;background:rgba(255,255,255,0.02)">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Yearly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="resp-yearly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="resp-yearly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="resp-yearly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="resp-yearly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="resp-yearly-eur">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- CnO Plus -->
+      <div style="margin-bottom:24px">
+        <h4 style="color:#7c5cfc;font-size:14px;margin-bottom:10px">🔄 CnO Plus</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid #2a2a3e">
+              <th style="text-align:left;padding:8px 12px;color:#888;font-weight:600">Plan</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">USD 🇺🇸</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">INR 🇮🇳</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">AED 🇦🇪</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">GBP 🇬🇧</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">EUR 🇪🇺</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #1a1a2e">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Monthly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnoplus-monthly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnoplus-monthly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnoplus-monthly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnoplus-monthly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnoplus-monthly-eur">—</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1a2e;background:rgba(255,255,255,0.02)">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Yearly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnoplus-yearly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnoplus-yearly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnoplus-yearly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnoplus-yearly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnoplus-yearly-eur">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- CnO Pro -->
+      <div style="margin-bottom:24px">
+        <h4 style="color:#7c5cfc;font-size:14px;margin-bottom:10px">🔬 CnO Pro</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid #2a2a3e">
+              <th style="text-align:left;padding:8px 12px;color:#888;font-weight:600">Plan</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">USD 🇺🇸</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">INR 🇮🇳</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">AED 🇦🇪</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">GBP 🇬🇧</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">EUR 🇪🇺</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #1a1a2e">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Monthly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-monthly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-monthly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-monthly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-monthly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-monthly-eur">—</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1a2e;background:rgba(255,255,255,0.02)">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Yearly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-yearly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-yearly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-yearly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-yearly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-yearly-eur">—</td>
+            </tr>
+            <tr style="background:rgba(255,255,255,0.02)">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">2-Year</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-2year-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-2year-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-2year-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-2year-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="cnopro-2year-eur">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tesla -->
+      <div style="margin-bottom:24px">
+        <h4 style="color:#7c5cfc;font-size:14px;margin-bottom:10px">⚡ Tesla</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid #2a2a3e">
+              <th style="text-align:left;padding:8px 12px;color:#888;font-weight:600">Plan</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">USD 🇺🇸</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">INR 🇮🇳</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">AED 🇦🇪</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">GBP 🇬🇧</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">EUR 🇪🇺</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #1a1a2e">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Monthly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="tesla-monthly-usd">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="tesla-monthly-inr">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="tesla-monthly-aed">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="tesla-monthly-gbp">—</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff" id="tesla-monthly-eur">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============ TAB 4: CAMPAIGNS ============ -->
 <div id="tab-emails" class="tab-content">
   <div class="email-section">
     <div class="email-header">
