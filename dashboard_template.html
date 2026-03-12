@@ -2065,7 +2065,7 @@ function getEligibleTrials(pp, mk) {
 function renderTrialChart() {
   if (charts.trial) charts.trial.destroy();
   const ctx = document.getElementById('trialChart').getContext('2d');
-  const plugs = getPlugs();
+  const plugs = getPlugs().filter(p => p !== 'GLP1'); // GLP1 has no trial→paid model, shown in Total Users instead
 
   // Update subtitle based on time scope
   const sub = document.getElementById('trialSubtitle');

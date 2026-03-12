@@ -1330,14 +1330,8 @@ def merge_glp1_into_data(revenue_data, purchase_data, trial_data, country_revenu
             if d in date_to_idx:
                 pd_m['purchases']['GLP1'][date_to_idx[d]] = mdata['orders'][i]
 
-    # Merge into trial_data (use signups as trial, orders as converted)
-    trial_data['GLP1'] = {}
-    for month_key, sdata in glp1_signups.items():
-        trial_data['GLP1'][month_key] = {
-            'dates': sdata['dates'],
-            'trial': sdata['signups'],
-            'converted': [0] * len(sdata['dates']),  # GLP1 doesn't have trial→paid concept
-        }
+    # NOTE: GLP1 does NOT go into trial_data (no trial→paid model).
+    # GLP1 signups are merged into cumulative_users instead (see merge_glp1_into_cumulative_users).
 
     # Merge into country_revenue — distribute revenue to India/UAE/USA based on region proportions
     total_region_rev = sum(glp1_region_totals.values()) or 1
@@ -1368,6 +1362,30 @@ def merge_glp1_into_data(revenue_data, purchase_data, trial_data, country_revenu
                     cr_m['subscriptions']['GLP1'][idx] = round(mdata['orders'][i] * proportion)
 
     print("  GLP1 data merged successfully.")
+
+
+def merge_glp1_into_cumulative_users(cumulative_users, glp1_signups):
+    """
+    Merges GLP-1 signups into cumulative_users as total users.
+    GLP1 doesn't have a trial→paid model, so signups = total users.
+    Computes a running cumulative sum of signups per month.
+    """
+    print("  Merging GLP1 signups into cumulative_users...")
+    # Build cumulative total by month
+    running_total = 0
+    for month_key in sorted(glp1_signups.keys()):
+        month_signups = sum(glp1_signups[month_key]['signups'])
+        running_total += month_signups
+
+        if month_key not in cumulative_users:
+            cumulative_users[month_key] = {}
+        cumulative_users[month_key]['GLP1'] = running_total
+
+        # Update _total (add GLP1 users — note: no dedup needed since GLP1 users don't overlap with Snowflake users)
+        old_total = cumulative_users[month_key].get('_total', 0)
+        cumulative_users[month_key]['_total'] = old_total + running_total
+
+    print(f"  GLP1 cumulative users: {running_total} total across {len(glp1_signups)} months")
 
 
 # ============================================================
@@ -1601,6 +1619,7 @@ def main():
         glp1_revenue, glp1_region_totals, glp1_signups = fetch_glp1_data()
         merge_glp1_into_data(revenue_data, purchase_data, trial_data, country_revenue,
                              glp1_revenue, glp1_region_totals, glp1_signups)
+        merge_glp1_into_cumulative_users(cumulative_users, glp1_signups)
     except Exception as e:
         print(f"WARNING: GLP-1 data fetch failed, skipping: {e}")
 
