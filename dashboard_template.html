@@ -2065,7 +2065,8 @@ function getEligibleTrials(pp, mk) {
 function renderTrialChart() {
   if (charts.trial) charts.trial.destroy();
   const ctx = document.getElementById('trialChart').getContext('2d');
-  const plugs = getPlugs().filter(p => p !== 'GLP1'); // GLP1 has no trial→paid model, shown in Total Users instead
+  const NO_TRIAL_PLUGS = ['GLP1', 'BetterHelp', 'Migraine']; // No trial→paid model, shown in Total Users instead
+  const plugs = getPlugs().filter(p => !NO_TRIAL_PLUGS.includes(p));
 
   // Update subtitle based on time scope
   const sub = document.getElementById('trialSubtitle');
@@ -2659,10 +2660,10 @@ function getDefaultCountryData() {
   const teslaCountries = ['USA','UAE','France','UK + IR','Canada','Thailand','Italy','Czech Republic','India','Australia','Spain','Austria','Philippines','Mexico','Saudi Arabia','Singapore','Poland','Germany','New Zealand','Switzerland'];
   // GLP-1: India, UAE, US only
   const glp1Countries = ['India','UAE','USA'];
-  // Migraine: TBD — no countries active yet
-  const migraineCountries = [];
-  // BetterHelp: TBD — no countries active yet
-  const betterHelpCountries = [];
+  // Migraine: India & UAE (proposed $3.99/mo subscription)
+  const migraineCountries = ['India','UAE'];
+  // BetterHelp: US (affiliate via impact.com)
+  const betterHelpCountries = ['USA'];
   COUNTRIES.forEach(country => {
     data[country] = {};
     data[country]['AFib'] = afibCountries.includes(country);

@@ -1191,6 +1191,13 @@ GLP1_DAILY_SIGNUPS_CARD = 20302   # Daily signups from glp1_profiles
 GLP1_DAILY_ORDERS_CARD = 20317    # Daily orders placed
 GLP1_ACTIVE_COUNTRIES = ['USA', 'India', 'UAE']
 
+# ── Migraine constants ──
+MIGRAINE_ACTIVE_COUNTRIES = ['India', 'UAE']
+MIGRAINE_SUBSCRIPTION_PRICE_USD = 3.99
+
+# ── BetterHelp constants (hardcoded from impact.com) ──
+BETTERHELP_ACTIVE_COUNTRIES = ['USA']  # Affiliate program, primarily US
+
 def fetch_glp1_data():
     """
     Fetches GLP-1 data from its own Metabase cards (MySQL DB 34).
@@ -1386,6 +1393,107 @@ def merge_glp1_into_cumulative_users(cumulative_users, glp1_signups):
         cumulative_users[month_key]['_total'] = old_total + running_total
 
     print(f"  GLP1 cumulative users: {running_total} total across {len(glp1_signups)} months")
+
+
+# ============================================================
+# BETTERHELP — hardcoded from impact.com (no API access)
+# ============================================================
+def get_betterhelp_hardcoded_data():
+    """
+    Returns hardcoded BetterHelp data from impact.com dashboard.
+    Data source: impact.com Snapshot (Feb 19 - Mar 5, 2026)
+    Total: 1,223 clicks, 132 actions, $2,000 earnings, 10.79% conversion
+    """
+    print("\n--- Loading BetterHelp hardcoded data (impact.com) ---")
+
+    # Daily breakdown estimated from impact.com chart shape
+    # Feb 19-28: ~$400 (small spike around Feb 21-23)
+    # Mar 1-5: ~$1,600 (big spike around Mar 3-5)
+    betterhelp_daily = {
+        '2026-02': {
+            'dates': [
+                '2026-02-19', '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
+                '2026-02-24', '2026-02-25', '2026-02-26', '2026-02-27', '2026-02-28',
+            ],
+            'revenue': [10, 20, 120, 100, 80, 20, 15, 15, 10, 10],  # ~$400 total
+            'actions': [1, 2, 8, 7, 5, 1, 1, 1, 1, 1],              # ~28 actions
+        },
+        '2026-03': {
+            'dates': [
+                '2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05',
+            ],
+            'revenue': [100, 150, 400, 600, 350],  # ~$1,600 total
+            'actions': [7, 10, 28, 38, 21],         # ~104 actions
+        },
+    }
+
+    total_rev = sum(sum(m['revenue']) for m in betterhelp_daily.values())
+    total_actions = sum(sum(m['actions']) for m in betterhelp_daily.values())
+    print(f"  BetterHelp total: ${total_rev:,.0f} revenue, {total_actions} actions (users)")
+    return betterhelp_daily
+
+
+def merge_betterhelp_into_data(revenue_data, purchase_data, country_revenue, cumulative_users, bh_data):
+    """
+    Merges BetterHelp hardcoded data into dashboard structures.
+    Revenue = Action Earnings from impact.com.
+    Users = Actions (conversions) from impact.com.
+    """
+    print("  Merging BetterHelp data into dashboard structures...")
+
+    running_users = 0
+
+    for month_key, mdata in bh_data.items():
+        # ── Revenue data ──
+        if month_key in revenue_data:
+            rd = revenue_data[month_key]
+            if 'BetterHelp' not in rd['revenue']:
+                rd['revenue']['BetterHelp'] = [0] * len(rd['dates'])
+                rd['subscriptions']['BetterHelp'] = [0] * len(rd['dates'])
+            date_to_idx = {d: i for i, d in enumerate(rd['dates'])}
+            for i, d in enumerate(mdata['dates']):
+                if d in date_to_idx:
+                    idx = date_to_idx[d]
+                    rd['revenue']['BetterHelp'][idx] = mdata['revenue'][i]
+                    rd['subscriptions']['BetterHelp'][idx] = mdata['actions'][i]
+
+        # ── Purchase data ──
+        if month_key in purchase_data:
+            pd_m = purchase_data[month_key]
+            if 'BetterHelp' not in pd_m['purchases']:
+                pd_m['purchases']['BetterHelp'] = [0] * len(pd_m['dates'])
+            date_to_idx = {d: i for i, d in enumerate(pd_m['dates'])}
+            for i, d in enumerate(mdata['dates']):
+                if d in date_to_idx:
+                    pd_m['purchases']['BetterHelp'][date_to_idx[d]] = mdata['actions'][i]
+
+        # ── Country revenue (all attributed to USA) ──
+        for country in BETTERHELP_ACTIVE_COUNTRIES:
+            if country not in country_revenue:
+                country_revenue[country] = {}
+            if month_key in country_revenue[country]:
+                cr_m = country_revenue[country][month_key]
+                if 'BetterHelp' not in cr_m['revenue']:
+                    cr_m['revenue']['BetterHelp'] = [0] * len(cr_m['dates'])
+                    cr_m['subscriptions']['BetterHelp'] = [0] * len(cr_m['dates'])
+                date_to_idx = {d: i for i, d in enumerate(cr_m['dates'])}
+                for i, d in enumerate(mdata['dates']):
+                    if d in date_to_idx:
+                        idx = date_to_idx[d]
+                        cr_m['revenue']['BetterHelp'][idx] = mdata['revenue'][i]
+                        cr_m['subscriptions']['BetterHelp'][idx] = mdata['actions'][i]
+
+        # ── Cumulative users ──
+        month_actions = sum(mdata['actions'])
+        running_users += month_actions
+        if month_key not in cumulative_users:
+            cumulative_users[month_key] = {}
+        cumulative_users[month_key]['BetterHelp'] = running_users
+        old_total = cumulative_users[month_key].get('_total', 0)
+        cumulative_users[month_key]['_total'] = old_total + running_users
+
+    print(f"  BetterHelp cumulative users: {running_users} total")
+    print("  BetterHelp data merged successfully.")
 
 
 # ============================================================
@@ -1622,6 +1730,13 @@ def main():
         merge_glp1_into_cumulative_users(cumulative_users, glp1_signups)
     except Exception as e:
         print(f"WARNING: GLP-1 data fetch failed, skipping: {e}")
+
+    # Load and merge BetterHelp hardcoded data (impact.com)
+    try:
+        bh_data = get_betterhelp_hardcoded_data()
+        merge_betterhelp_into_data(revenue_data, purchase_data, country_revenue, cumulative_users, bh_data)
+    except Exception as e:
+        print(f"WARNING: BetterHelp data merge failed, skipping: {e}")
 
     # Inject into template
     output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, user_overlap, cumulative_users, plan_mix, country_user_data)
