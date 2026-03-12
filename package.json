@@ -1,0 +1,17 @@
+{
+  "name": "powerplugs-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "express-session": "^1.18.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
