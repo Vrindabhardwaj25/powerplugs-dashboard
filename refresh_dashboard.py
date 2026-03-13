@@ -1401,29 +1401,32 @@ def merge_glp1_into_cumulative_users(cumulative_users, glp1_signups):
 def get_betterhelp_hardcoded_data():
     """
     Returns hardcoded BetterHelp data from impact.com dashboard.
-    Data source: impact.com Snapshot (Feb 19 - Mar 5, 2026)
-    Total: 1,223 clicks, 132 actions, $2,000 earnings, 10.79% conversion
+    Updated data: 51 purchases, $10,200 revenue
+    PowerPlug activations: 41,994
     """
     print("\n--- Loading BetterHelp hardcoded data (impact.com) ---")
 
-    # Daily breakdown estimated from impact.com chart shape
-    # Feb 19-28: ~$400 (small spike around Feb 21-23)
-    # Mar 1-5: ~$1,600 (big spike around Mar 3-5)
+    # $10,200 total revenue, 51 purchases
+    # Distributed across Feb-Mar based on impact.com chart shape
+    # Feb 19-28: ~$2,000 (early ramp)
+    # Mar 1-13: ~$8,200 (strong growth)
     betterhelp_daily = {
         '2026-02': {
             'dates': [
                 '2026-02-19', '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
                 '2026-02-24', '2026-02-25', '2026-02-26', '2026-02-27', '2026-02-28',
             ],
-            'revenue': [10, 20, 120, 100, 80, 20, 15, 15, 10, 10],  # ~$400 total
-            'actions': [1, 2, 8, 7, 5, 1, 1, 1, 1, 1],              # ~28 actions
+            'revenue': [50, 100, 400, 350, 300, 200, 150, 150, 150, 150],  # $2,000 total
+            'actions': [0, 1, 2, 2, 1, 1, 1, 1, 1, 1],                     # 11 purchases
         },
         '2026-03': {
             'dates': [
                 '2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05',
+                '2026-03-06', '2026-03-07', '2026-03-08', '2026-03-09', '2026-03-10',
+                '2026-03-11', '2026-03-12', '2026-03-13',
             ],
-            'revenue': [100, 150, 400, 600, 350],  # ~$1,600 total
-            'actions': [7, 10, 28, 38, 21],         # ~104 actions
+            'revenue': [400, 500, 600, 700, 750, 650, 550, 650, 750, 650, 550, 650, 800],  # $8,200 total
+            'actions': [2, 3, 3, 4, 4, 3, 3, 3, 4, 3, 3, 3, 2],                             # 40 purchases
         },
     }
 

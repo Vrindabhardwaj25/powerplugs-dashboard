@@ -371,7 +371,7 @@ fetch('/auth/user').then(r=>r.ok?r.json():null).then(u=>{
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
           <h4 style="color:#7c5cfc;font-size:14px;margin:0">Cardio Adaptability</h4>
           <span style="font-size:11px;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">Low</span>
-          <span style="font-size:11px;color:#666">3-day FT (monthly) · 14-day FT (yearly)</span>
+          <span style="font-size:11px;color:#666">3-day FT (monthly) · 7-day FT (yearly)</span>
         </div>
         <div style="font-size:11px;color:#555;margin-bottom:10px">Launched June 2024</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -419,7 +419,7 @@ fetch('/auth/user').then(r=>r.ok?r.json():null).then(u=>{
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
           <h4 style="color:#7c5cfc;font-size:14px;margin:0">Respiratory Health</h4>
           <span style="font-size:11px;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 8px;border-radius:4px">Mid — Wellness</span>
-          <span style="font-size:11px;color:#666">7-day FT (monthly) · 14-day FT (yearly)</span>
+          <span style="font-size:11px;color:#666">3-day FT (monthly) · 7-day FT (yearly)</span>
         </div>
         <div style="font-size:11px;color:#555;margin-bottom:10px">Launched December 2025</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -507,7 +507,7 @@ fetch('/auth/user').then(r=>r.ok?r.json():null).then(u=>{
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
           <h4 style="color:#7c5cfc;font-size:14px;margin:0">AFib</h4>
           <span style="font-size:11px;color:#ef4444;background:rgba(239,68,68,0.1);padding:2px 8px;border-radius:4px">High — Medical</span>
-          <span style="font-size:11px;color:#666">3-day FT (monthly) · 14-day FT (yearly)</span>
+          <span style="font-size:11px;color:#666">3-day FT (monthly) · 7-day FT (yearly)</span>
         </div>
         <div style="font-size:11px;color:#555;margin-bottom:10px">Launched July 2024</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -547,7 +547,7 @@ fetch('/auth/user').then(r=>r.ok?r.json():null).then(u=>{
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
           <h4 style="color:#7c5cfc;font-size:14px;margin:0">Tesla</h4>
           <span style="font-size:11px;color:#a855f7;background:rgba(168,85,247,0.1);padding:2px 8px;border-radius:4px">Premium / Niche</span>
-          <span style="font-size:11px;color:#666">7-day FT (monthly only)</span>
+          <span style="font-size:11px;color:#666">3-day FT (monthly only)</span>
         </div>
         <div style="font-size:11px;color:#555;margin-bottom:10px">Launched June 2025</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -569,6 +569,102 @@ fetch('/auth/user').then(r=>r.ok?r.json():null).then(u=>{
               <td style="text-align:center;padding:8px 12px;color:#fff">24.99 dh</td>
               <td style="text-align:center;padding:8px 12px;color:#555">—</td>
               <td style="text-align:center;padding:8px 12px;color:#555">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 6. Migraine — PROPOSED -->
+      <div style="margin-bottom:28px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+          <h4 style="color:#f97316;font-size:14px;margin:0">Migraine</h4>
+          <span style="font-size:11px;color:#f97316;background:rgba(249,115,22,0.1);padding:2px 8px;border-radius:4px">Proposed</span>
+          <span style="font-size:11px;color:#666">3-day FT (monthly) · 7-day FT (yearly)</span>
+        </div>
+        <div style="font-size:11px;color:#555;margin-bottom:10px">India &amp; UAE only · Proposed pricing</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid #2a2a3e">
+              <th style="text-align:left;padding:8px 12px;color:#888;font-weight:600">Plan</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">USD</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">INR</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">AED</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #1a1a2e">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Monthly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">$3.99</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">&#8377;349</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">14.99 dh</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Yearly</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">$39.99</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">&#8377;2,999</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">149.99 dh</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 7. BetterHelp — AFFILIATE -->
+      <div style="margin-bottom:28px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+          <h4 style="color:#06b6d4;font-size:14px;margin:0">BetterHelp</h4>
+          <span style="font-size:11px;color:#06b6d4;background:rgba(6,182,212,0.1);padding:2px 8px;border-radius:4px">Affiliate</span>
+          <span style="font-size:11px;color:#666">No free trial (referral model)</span>
+        </div>
+        <div style="font-size:11px;color:#555;margin-bottom:10px">USA · Affiliate via impact.com · Revenue = action earnings per conversion</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid #2a2a3e">
+              <th style="text-align:left;padding:8px 12px;color:#888;font-weight:600">Model</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">Earning / Action</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">Conv. Rate</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">EPC</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Affiliate Referral</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">~$200/action</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">10.79%</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">$1.64</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 8. GLP-1 — ORDER-BASED -->
+      <div style="margin-bottom:28px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+          <h4 style="color:#ec4899;font-size:14px;margin:0">GLP-1</h4>
+          <span style="font-size:11px;color:#ec4899;background:rgba(236,72,153,0.1);padding:2px 8px;border-radius:4px">Order-Based</span>
+          <span style="font-size:11px;color:#666">No free trial (medication orders)</span>
+        </div>
+        <div style="font-size:11px;color:#555;margin-bottom:10px">India (tata_1mg) · UAE (valeo) · USA · Revenue from medication orders (INR/85, AED/3.67)</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid #2a2a3e">
+              <th style="text-align:left;padding:8px 12px;color:#888;font-weight:600">Model</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">Region</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">Partner</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">Currency</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #1a1a2e">
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Medication Order</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">India</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">Tata 1mg</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">INR (&#247;85)</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Medication Order</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">UAE</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">Valeo</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">AED (&#247;3.67)</td>
             </tr>
           </tbody>
         </table>
@@ -1140,7 +1236,7 @@ function renderKPIs() {
   }
   defs.push(`<b>Purchases ${hasCustomDates()?'(Custom)':isAllTime()?'':'(MTD)'}</b> = Total subscription purchases ${hasCustomDates()?'in selected date range':isAllTime()?'across all months':'in the selected month to date'} for selected Powerplugs.`);
   defs.push(`<b>ARPU</b> = Total Revenue \u00f7 Paid Users (from all_purchase, deduplicated by email).`);
-  defs.push(`<b>* Trial \u2192 Paid</b> = Converted Users \u00f7 Eligible Trial Users (excludes users whose free trial hasn\u2019t ended yet). Trial windows: C&O 7\u201330 days, Others 3\u20137 days. Source: RevCat.`);
+  defs.push(`<b>* Trial \u2192 Paid</b> = Converted Users \u00f7 Eligible Trial Users (excludes users whose free trial hasn\u2019t ended yet). Trial windows: C&O 7\u201330 days, All others 3-day (monthly) / 7-day (yearly). Source: RevCat.`);
   defEl.innerHTML = defs.join(' &nbsp;\u2022&nbsp; ');
 }
 
