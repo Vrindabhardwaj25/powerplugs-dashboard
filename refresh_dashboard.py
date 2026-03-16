@@ -67,6 +67,7 @@ PP_MAP = {
     'glp1': 'GLP1',
     'glp_1': 'GLP1',
     'glp-1': 'GLP1',
+    'glp': 'GLP1',
 }
 
 # Template tag IDs for revenue card 9444
@@ -1726,21 +1727,13 @@ def main():
     plan_mix = fetch_plan_mix()
     country_user_data = fetch_country_user_data()
 
-    # Fetch and merge GLP-1 data (separate data source)
+    # GLP-1 & BetterHelp revenue now comes from card 9061 (all_purchase table).
+    # We only need GLP-1 signups for cumulative users (from separate MySQL DB).
     try:
         glp1_revenue, glp1_region_totals, glp1_signups = fetch_glp1_data()
-        merge_glp1_into_data(revenue_data, purchase_data, trial_data, country_revenue,
-                             glp1_revenue, glp1_region_totals, glp1_signups)
         merge_glp1_into_cumulative_users(cumulative_users, glp1_signups)
     except Exception as e:
-        print(f"WARNING: GLP-1 data fetch failed, skipping: {e}")
-
-    # Load and merge BetterHelp hardcoded data (impact.com)
-    try:
-        bh_data = get_betterhelp_hardcoded_data()
-        merge_betterhelp_into_data(revenue_data, purchase_data, country_revenue, cumulative_users, bh_data)
-    except Exception as e:
-        print(f"WARNING: BetterHelp data merge failed, skipping: {e}")
+        print(f"WARNING: GLP-1 signups fetch failed, skipping: {e}")
 
     # Inject into template
     output = inject_data(template, revenue_data, purchase_data, trial_data, user_data, country_revenue, user_overlap, cumulative_users, plan_mix, country_user_data)

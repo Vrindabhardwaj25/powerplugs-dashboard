@@ -1251,7 +1251,6 @@ function renderAlerts() {
   const plugs = getPlugs();
   const alerts = []; // Each: { type, text, priority } — lower priority number = more important
 
-  // Helper: get previous month key (e.g., '2026-02' -> '2026-01')
   function getPrevMonthKey(mk) {
     const [y, m] = mk.split('-').map(Number);
     const pm = m === 1 ? 12 : m - 1;
@@ -1259,120 +1258,89 @@ function renderAlerts() {
     return `${py}-${String(pm).padStart(2, '0')}`;
   }
 
-  function getPrevMonthDayRev(p, mk, dayOfMonth) {
-    const prevMk = getPrevMonthKey(mk);
-    const prevData = getRevForMonth(prevMk);
-    if (!prevData || !prevData.dates) return null;
-    const targetDate = prevMk + '-' + String(dayOfMonth).padStart(2, '0');
-    const idx = prevData.dates.indexOf(targetDate);
-    if (idx < 0) return null;
-    return (prevData.revenue[p] || [])[idx] ?? null;
-  }
-
-  function getPrevMonth3DayAvg(p, mk, dayOfMonth) {
-    const prevMk = getPrevMonthKey(mk);
-    const prevData = getRevForMonth(prevMk);
-    if (!prevData || !prevData.dates) return null;
-    const targetDate = prevMk + '-' + String(dayOfMonth).padStart(2, '0');
-    const idx = prevData.dates.indexOf(targetDate);
-    if (idx < 0) return null;
-    const vals = prevData.revenue[p] || [];
-    const start = Math.max(0, idx - 1);
-    const end = Math.min(vals.length - 1, idx + 1);
-    let sum3 = 0, count = 0;
-    for (let i = start; i <= end; i++) { sum3 += vals[i] || 0; count++; }
-    return count > 0 ? sum3 / count : null;
-  }
-
   if (!isAllTime()) {
     const mk = currentMonth;
     const revData = getRevForMonth(mk);
     if (revData && revData.dates.length >= 3) {
       const days = revData.dates.length;
-      const lastDate = revData.dates[days - 1];
-      const dayOfMonth = parseInt(lastDate.split('-')[2], 10);
       const totalRev = plugs.reduce((s,p) => s + sum(revData.revenue[p]||[]), 0);
       const daysInMonth = getMonthDays(mk);
       const projected = Math.round((totalRev / days) * daysInMonth);
+      const dailyAvg = totalRev / days;
+      const prevMk = getPrevMonthKey(mk);
+      const prevRevData = getRevForMonth(prevMk);
+      const prevFullRev = prevRevData ? plugs.reduce((s,p) => s + sum(prevRevData.revenue[p]||[]), 0) : 0;
 
-      // ── PRIORITY 1: Revenue vs plan target (most actionable) ──
+      // ── 1. PROJECTED REVENUE vs LAST MONTH (most useful context) ──
+      if (prevFullRev > 0) {
+        const projVsPrev = ((projected - prevFullRev) / prevFullRev * 100);
+        const prevMonthName = new Date(parseInt(prevMk.split('-')[0]), parseInt(prevMk.split('-')[1]) - 1).toLocaleDateString('en-US', { month: 'short' });
+        if (projVsPrev > 5)
+          alerts.push({ type: 'up', priority: 1, text: `Projected <span class="up">$${projected.toLocaleString()}</span> this month — <span class="up">+${projVsPrev.toFixed(0)}% vs ${prevMonthName}</span> ($${Math.round(prevFullRev).toLocaleString()}). Daily avg: $${Math.round(dailyAvg).toLocaleString()}` });
+        else if (projVsPrev < -5)
+          alerts.push({ type: 'down', priority: 1, text: `Projected <span class="down">$${projected.toLocaleString()}</span> this month — <span class="down">${projVsPrev.toFixed(0)}% vs ${prevMonthName}</span> ($${Math.round(prevFullRev).toLocaleString()}). Daily avg: $${Math.round(dailyAvg).toLocaleString()}` });
+        else
+          alerts.push({ type: 'info', priority: 2, text: `Projected <span class="neutral">$${projected.toLocaleString()}</span> this month — flat vs ${prevMonthName}. Daily avg: $${Math.round(dailyAvg).toLocaleString()}` });
+      }
+
+      // ── 2. REVENUE vs PLAN TARGET ──
       const target = getCampaignTarget(mk);
       if (target > 0) {
         const pace = (projected / target * 100);
-        if (pace < 80) {
-          alerts.push({ type: 'down', priority: 1, text: `Revenue on pace for <span class="down">${pace.toFixed(0)}%</span> of plan target — <span class="down">$${Math.round(target - projected).toLocaleString()} shortfall</span> projected. Needs intervention.` });
-        } else if (pace < 95) {
-          alerts.push({ type: 'down', priority: 3, text: `Revenue slightly behind target: <span class="neutral">${pace.toFixed(0)}%</span> on pace — $${Math.round(target - projected).toLocaleString()} gap to close.` });
-        } else if (pace > 120) {
-          alerts.push({ type: 'up', priority: 5, text: `On pace to <span class="up">exceed target by ${(pace-100).toFixed(0)}%</span> ($${projected.toLocaleString()} projected vs $${target.toLocaleString()} target)` });
+        if (pace < 80)
+          alerts.push({ type: 'down', priority: 1, text: `On pace for <span class="down">${pace.toFixed(0)}%</span> of target — <span class="down">$${Math.round(target - projected).toLocaleString()} shortfall</span>. Need $${Math.round((target - totalRev) / (daysInMonth - days)).toLocaleString()}/day to hit target.` });
+        else if (pace < 95)
+          alerts.push({ type: 'down', priority: 2, text: `Slightly behind target: <span class="neutral">${pace.toFixed(0)}%</span> on pace. Need $${Math.round((target - totalRev) / (daysInMonth - days)).toLocaleString()}/day remaining to close gap.` });
+        else if (pace > 110)
+          alerts.push({ type: 'up', priority: 4, text: `On pace to <span class="up">exceed target by ${(pace-100).toFixed(0)}%</span> ($${projected.toLocaleString()} projected vs $${target.toLocaleString()} target)` });
+      }
+
+      // ── 3. LAST 7 DAYS vs PREVIOUS 7 DAYS (weekly momentum) ──
+      if (days >= 7) {
+        const last7 = plugs.reduce((s,p) => { const v = revData.revenue[p]||[]; return s + v.slice(-7).reduce((a,b)=>a+b,0); }, 0);
+        const prev7 = days >= 14
+          ? plugs.reduce((s,p) => { const v = revData.revenue[p]||[]; return s + v.slice(-14,-7).reduce((a,b)=>a+b,0); }, 0)
+          : (prevRevData ? plugs.reduce((s,p) => { const v = prevRevData.revenue[p]||[]; return s + v.slice(-7).reduce((a,b)=>a+b,0); }, 0) : 0);
+        if (prev7 > 0) {
+          const weekChg = ((last7 - prev7) / prev7 * 100);
+          if (weekChg > 15)
+            alerts.push({ type: 'up', priority: 2, text: `Weekly momentum: last 7 days <span class="up">+${weekChg.toFixed(0)}%</span> vs prior 7 days ($${Math.round(last7).toLocaleString()} vs $${Math.round(prev7).toLocaleString()})` });
+          else if (weekChg < -15)
+            alerts.push({ type: 'down', priority: 2, text: `Weekly slowdown: last 7 days <span class="down">${weekChg.toFixed(0)}%</span> vs prior 7 days ($${Math.round(last7).toLocaleString()} vs $${Math.round(prev7).toLocaleString()})` });
         }
       }
 
-      // ── PRIORITY 2: Unusual revenue drops (not seasonal) — need action ──
-      plugs.forEach(p => {
-        const vals = revData.revenue[p] || [];
-        if (vals.length < 3) return;
-        const last = vals[days-1], prev = vals[days-2], prevPrev = vals[days-3];
-        const avg3 = (prev + prevPrev + (vals[days-4]||prev)) / 3;
-        if (avg3 < 50) return; // skip noise from tiny PPs
+      // ── 4. PP REVENUE MIX — concentration & share shifts ──
+      const ppRevs = {};
+      plugs.forEach(p => { ppRevs[p] = sum(revData.revenue[p]||[]); });
+      const topPP = plugs.reduce((best, p) => ppRevs[p] > (ppRevs[best]||0) ? p : best, plugs[0]);
+      const topShare = totalRev > 0 ? (ppRevs[topPP] / totalRev * 100) : 0;
+      if (topShare > 50 && plugs.length > 2)
+        alerts.push({ type: 'info', priority: 5, text: `<span class="val">${displayName(topPP)}</span> drives <span class="neutral">${topShare.toFixed(0)}%</span> of revenue ($${Math.round(ppRevs[topPP]).toLocaleString()}/${Math.round(totalRev).toLocaleString()}) — high concentration risk` });
 
-        // Unusual drop (not seasonal)
-        if (last < avg3 * 0.5) {
-          const prevMonthVal = getPrevMonthDayRev(p, mk, dayOfMonth);
-          const prevMonthAvg = getPrevMonth3DayAvg(p, mk, dayOfMonth);
-          let isSeasonal = false;
-          let seasonalNote = '';
-          if (prevMonthVal !== null && prevMonthAvg !== null && prevMonthAvg > 0) {
-            const prevRatio = prevMonthVal / prevMonthAvg;
-            if (prevRatio < 0.7) {
-              isSeasonal = true;
-              seasonalNote = ` <span style="color:#888;font-size:11px">(likely seasonal — last month same pattern)</span>`;
-            } else {
-              seasonalNote = ` <span style="color:#f59e0b;font-size:11px;font-weight:600">(unusual — last month was normal on this day)</span>`;
-            }
+      // ── 5. PER-PP: BIGGEST MOVERS vs LAST MONTH (at same point) ──
+      if (prevRevData) {
+        const ppChanges = [];
+        plugs.forEach(p => {
+          const curRev = sum(revData.revenue[p]||[]);
+          const prevSlice = (prevRevData.revenue[p]||[]).slice(0, days);
+          const prevRev = prevSlice.reduce((a,b)=>a+b, 0);
+          if (prevRev > 200) { // Only meaningful PPs
+            const chg = ((curRev - prevRev) / prevRev * 100);
+            ppChanges.push({ pp: p, curRev, prevRev, chg });
           }
-          // Unusual drops = priority 2, seasonal drops = priority 7 (low)
-          alerts.push({
-            type: 'down',
-            priority: isSeasonal ? 7 : 2,
-            text: `<span class="val">${displayName(p)}</span> dropped to <span class="down">$${Math.round(last).toLocaleString()}</span> yesterday (${(100-last/avg3*100).toFixed(0)}% below 3-day avg)${seasonalNote}`
-          });
-        }
-
-        // Spike
-        if (last > avg3 * 2 && last > 100) {
-          const prevMonthVal = getPrevMonthDayRev(p, mk, dayOfMonth);
-          const prevMonthAvg = getPrevMonth3DayAvg(p, mk, dayOfMonth);
-          let seasonalNote = '';
-          if (prevMonthVal !== null && prevMonthAvg !== null && prevMonthAvg > 0) {
-            const prevRatio = prevMonthVal / prevMonthAvg;
-            if (prevRatio > 1.5) seasonalNote = ` <span style="color:#888;font-size:11px">(consistent — same pattern last month)</span>`;
-          }
-          alerts.push({ type: 'up', priority: 6, text: `<span class="val">${displayName(p)}</span> spiked to <span class="up">$${Math.round(last).toLocaleString()}</span> yesterday (${(last/avg3*100-100).toFixed(0)}% above 3-day avg)${seasonalNote}` });
-        }
-      });
-
-      // ── PRIORITY 3: MoM pace — context for overall health ──
-      const prevMk = getPrevMonthKey(mk);
-      const prevRevData = getRevForMonth(prevMk);
-      if (prevRevData && prevRevData.dates.length > 0) {
-        const prevDaysToCompare = Math.min(days, prevRevData.dates.length);
-        const prevTotalAtSamePoint = plugs.reduce((s,p) => {
-          const pv = prevRevData.revenue[p] || [];
-          return s + pv.slice(0, prevDaysToCompare).reduce((a,b) => a+b, 0);
-        }, 0);
-        if (prevTotalAtSamePoint > 0) {
-          const momPace = ((totalRev - prevTotalAtSamePoint) / prevTotalAtSamePoint * 100);
-          const prevMonthName = new Date(parseInt(prevMk.split('-')[0]), parseInt(prevMk.split('-')[1]) - 1).toLocaleDateString('en-US', { month: 'short' });
-          if (momPace < -10) {
-            alerts.push({ type: 'down', priority: 3, text: `Day ${days}: <span class="down">${momPace.toFixed(1)}% behind ${prevMonthName}</span> at same point ($${Math.round(totalRev).toLocaleString()} vs $${Math.round(prevTotalAtSamePoint).toLocaleString()})` });
-          } else if (momPace > 15) {
-            alerts.push({ type: 'up', priority: 4, text: `Day ${days}: <span class="up">+${momPace.toFixed(1)}% ahead of ${prevMonthName}</span> at same point ($${Math.round(totalRev).toLocaleString()} vs $${Math.round(prevTotalAtSamePoint).toLocaleString()})` });
-          }
+        });
+        ppChanges.sort((a,b) => b.chg - a.chg);
+        if (ppChanges.length > 0 && ppChanges[0].chg > 20)
+          alerts.push({ type: 'up', priority: 3, text: `<span class="val">${displayName(ppChanges[0].pp)}</span> up <span class="up">+${ppChanges[0].chg.toFixed(0)}%</span> vs same point last month ($${Math.round(ppChanges[0].curRev).toLocaleString()} vs $${Math.round(ppChanges[0].prevRev).toLocaleString()})` });
+        if (ppChanges.length > 0) {
+          const worst = ppChanges[ppChanges.length-1];
+          if (worst.chg < -20)
+            alerts.push({ type: 'down', priority: 3, text: `<span class="val">${displayName(worst.pp)}</span> down <span class="down">${worst.chg.toFixed(0)}%</span> vs same point last month ($${Math.round(worst.curRev).toLocaleString()} vs $${Math.round(worst.prevRev).toLocaleString()})` });
         }
       }
 
-      // ── PRIORITY 4: All-time high — celebrate wins ──
+      // ── 6. ALL-TIME HIGH — celebrate wins ──
       const allMonths = Object.keys(REVENUE_DATA).sort();
       plugs.forEach(p => {
         const currentMtd = sum(revData.revenue[p]||[]);
@@ -1380,28 +1348,44 @@ function renderAlerts() {
           const mdata = REVENUE_DATA[m];
           return mdata ? Math.max(max, sum(mdata.revenue[p]||[])) : max;
         }, 0);
-        if (currentMtd > best && best > 0 && days >= 15) {
+        if (currentMtd > best && best > 0 && days >= 15)
           alerts.push({ type: 'up', priority: 4, text: `<span class="val">${displayName(p)}</span> at <span class="up">all-time high</span> ($${Math.round(currentMtd).toLocaleString()}) with ${daysInMonth - days} days left` });
-        }
       });
 
-      // ── PRIORITY 5: User growth anomalies from cumulative data ──
+      // ── 7. USER GROWTH ──
       if (CUMULATIVE_USERS && Object.keys(CUMULATIVE_USERS).length >= 2) {
         const cuMonths = Object.keys(CUMULATIVE_USERS).sort();
         const latestM = cuMonths[cuMonths.length - 1];
         const prevM = cuMonths[cuMonths.length - 2];
+        const curTotal = CUMULATIVE_USERS[latestM]?.['_total'] || 0;
+        const prvTotal = CUMULATIVE_USERS[prevM]?.['_total'] || 0;
+        if (prvTotal > 0) {
+          const totalGrowth = ((curTotal - prvTotal) / prvTotal * 100);
+          const newUsers = curTotal - prvTotal;
+          alerts.push({ type: totalGrowth > 5 ? 'up' : 'info', priority: 5, text: `User base: <span class="val">${curTotal.toLocaleString()}</span> total (+${newUsers.toLocaleString()} new, <span class="${totalGrowth > 5 ? 'up' : 'neutral'}">+${totalGrowth.toFixed(1)}% MoM</span>)` });
+        }
+        // Fastest growing PP by users
+        let bestUserGrowth = 0, bestUserPP = '';
         plugs.forEach(p => {
           const cur = CUMULATIVE_USERS[latestM]?.[p] || 0;
           const prv = CUMULATIVE_USERS[prevM]?.[p] || 0;
-          if (prv > 0) {
+          if (prv > 100) {
             const growth = ((cur - prv) / prv * 100);
-            if (growth > 40) {
-              alerts.push({ type: 'up', priority: 5, text: `<span class="val">${displayName(p)}</span> user base surging: <span class="up">+${growth.toFixed(0)}% MoM</span> (${prv.toLocaleString()} → ${cur.toLocaleString()})` });
-            } else if (growth < 5 && cur > 500) {
-              alerts.push({ type: 'down', priority: 5, text: `<span class="val">${displayName(p)}</span> user growth stalling: <span class="neutral">+${growth.toFixed(1)}% MoM</span> — may need acquisition push` });
-            }
+            if (growth > bestUserGrowth) { bestUserGrowth = growth; bestUserPP = p; }
           }
         });
+        if (bestUserGrowth > 20)
+          alerts.push({ type: 'up', priority: 5, text: `Fastest user growth: <span class="val">${displayName(bestUserPP)}</span> <span class="up">+${bestUserGrowth.toFixed(0)}% MoM</span>` });
+      }
+
+      // ── 8. ARPU INSIGHT ──
+      if (CUMULATIVE_USERS) {
+        const cuMonths = Object.keys(CUMULATIVE_USERS).sort();
+        const latestCU = cuMonths.length > 0 ? (CUMULATIVE_USERS[cuMonths[cuMonths.length-1]]?.['_total'] || 0) : 0;
+        if (latestCU > 0 && totalRev > 0) {
+          const monthlyARPU = (projected / latestCU);
+          alerts.push({ type: 'info', priority: 6, text: `ARPU: <span class="neutral">$${monthlyARPU.toFixed(2)}/user/mo</span> (projected $${projected.toLocaleString()} / ${latestCU.toLocaleString()} users)` });
+        }
       }
     }
   } else {
@@ -1409,47 +1393,46 @@ function renderAlerts() {
     const allMonths = getMonthKeys();
     if (allMonths.length >= 2) {
       const lastMk = allMonths[allMonths.length-1], prevMk = allMonths[allMonths.length-2];
-
-      // Total revenue trend
       const curTotal = plugs.reduce((s,p) => s + getMonthlyRevenue(p, lastMk), 0);
       const prvTotal = plugs.reduce((s,p) => s + getMonthlyRevenue(p, prevMk), 0);
+
       if (prvTotal > 0) {
         const totalGrowth = ((curTotal - prvTotal) / prvTotal * 100);
-        if (totalGrowth > 10) alerts.push({ type: 'up', priority: 2, text: `Total revenue <span class="up">+${totalGrowth.toFixed(0)}% MoM</span> ($${Math.round(prvTotal).toLocaleString()} → $${Math.round(curTotal).toLocaleString()})` });
-        else if (totalGrowth < -10) alerts.push({ type: 'down', priority: 1, text: `Total revenue <span class="down">${totalGrowth.toFixed(0)}% MoM</span> ($${Math.round(prvTotal).toLocaleString()} → $${Math.round(curTotal).toLocaleString()})` });
+        alerts.push({ type: totalGrowth > 0 ? 'up' : 'down', priority: 1, text: `Latest month: <span class="${totalGrowth>0?'up':'down'}">$${Math.round(curTotal).toLocaleString()}</span> (<span class="${totalGrowth>0?'up':'down'}">${totalGrowth>0?'+':''}${totalGrowth.toFixed(0)}% MoM</span> from $${Math.round(prvTotal).toLocaleString()})` });
       }
 
-      // Fastest growing PP
+      // All-time total
+      const allTimeRev = allMonths.reduce((s,mk) => s + plugs.reduce((ps,p) => ps + getMonthlyRevenue(p,mk), 0), 0);
+      alerts.push({ type: 'info', priority: 2, text: `All-time PowerPlug revenue: <span class="val">$${Math.round(allTimeRev).toLocaleString()}</span> across ${allMonths.length} months` });
+
+      // Fastest & slowest growing PP
       let bestGrowth = -Infinity, bestPP = '', worstGrowth = Infinity, worstPP = '';
       plugs.forEach(p => {
         const cur = getMonthlyRevenue(p, lastMk), prv = getMonthlyRevenue(p, prevMk);
-        const growth = prv > 0 ? ((cur-prv)/prv*100) : 0;
-        if (growth > bestGrowth) { bestGrowth = growth; bestPP = p; }
-        if (growth < worstGrowth) { worstGrowth = growth; worstPP = p; }
+        if (prv > 200) {
+          const growth = ((cur-prv)/prv*100);
+          if (growth > bestGrowth) { bestGrowth = growth; bestPP = p; }
+          if (growth < worstGrowth) { worstGrowth = growth; worstPP = p; }
+        }
       });
       if (bestGrowth > 10) alerts.push({ type: 'up', priority: 3, text: `Fastest growing: <span class="val">${displayName(bestPP)}</span> <span class="up">+${bestGrowth.toFixed(0)}% MoM</span>` });
-      if (worstGrowth < -10) alerts.push({ type: 'down', priority: 2, text: `Needs attention: <span class="val">${displayName(worstPP)}</span> <span class="down">${worstGrowth.toFixed(0)}% MoM</span> — investigate cause` });
+      if (worstGrowth < -10) alerts.push({ type: 'down', priority: 3, text: `Needs attention: <span class="val">${displayName(worstPP)}</span> <span class="down">${worstGrowth.toFixed(0)}% MoM</span>` });
     }
   }
 
-  if (alerts.length === 0) {
-    section.style.display = 'none';
-    return;
-  }
+  if (alerts.length === 0) { section.style.display = 'none'; return; }
 
-  // Sort by priority (lower = more important), show top 5
   alerts.sort((a, b) => a.priority - b.priority);
-  const topAlerts = alerts.slice(0, 5);
+  const topAlerts = alerts.slice(0, 6);
 
   section.style.display = 'block';
   const icons = { up: '\u{1F525}', down: '\u26A0\uFE0F', info: '\u{1F4CA}' };
-  let html = `<div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:8px">\u{1F514} Key Alerts</div>`;
+  let html = `<div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:8px">\u{1F4A1} Insights</div>`;
   html += topAlerts.map(a => `<div class="insight-item" style="padding:3px 0">${icons[a.type] || icons.info} ${a.text}</div>`).join('');
 
-  // If there are more alerts, show them collapsed
-  if (alerts.length > 5) {
-    const rest = alerts.slice(5);
-    html += `<div id="moreAlertsToggle" style="margin-top:6px"><button onclick="document.getElementById('moreAlerts').style.display='block';this.style.display='none'" style="background:none;border:none;color:#7c5cfc;font-size:12px;cursor:pointer;padding:0;font-weight:600">+ ${rest.length} more alerts</button></div>`;
+  if (alerts.length > 6) {
+    const rest = alerts.slice(6);
+    html += `<div id="moreAlertsToggle" style="margin-top:6px"><button onclick="document.getElementById('moreAlerts').style.display='block';this.style.display='none'" style="background:none;border:none;color:#7c5cfc;font-size:12px;cursor:pointer;padding:0;font-weight:600">+ ${rest.length} more</button></div>`;
     html += `<div id="moreAlerts" style="display:none;margin-top:4px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05)">`;
     html += rest.map(a => `<div class="insight-item" style="padding:2px 0;opacity:0.7">${icons[a.type] || icons.info} ${a.text}</div>`).join('');
     html += `</div>`;
