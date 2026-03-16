@@ -796,7 +796,7 @@ const PLAN_MIX = /*__PLAN_MIX__*/{};
 // ============================================================
 // STATE & INIT
 // ============================================================
-let currentPP = 'All', currentMonth = '2026-02', charts = {};
+let currentPP = 'All', currentMonth = new Date().toISOString().slice(0, 7), charts = {};
 let customStartDate = null, customEndDate = null; // Custom date range overrides
 Chart.register(ChartDataLabels);
 Chart.defaults.color = '#666';
@@ -815,7 +815,7 @@ async function init() {
     opt.value = m;
     const d = new Date(m + '-01');
     opt.textContent = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-    if (m === '2026-02') opt.selected = true;
+    if (m === currentMonth) opt.selected = true;
     sel.appendChild(opt);
   });
   document.getElementById('filterPP').addEventListener('change', e => { currentPP = e.target.value; renderAll(); renderEmailTracker(); });
