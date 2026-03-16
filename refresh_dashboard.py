@@ -1193,7 +1193,7 @@ GLP1_ACTIVE_COUNTRIES = ['USA', 'India', 'UAE']
 
 # ── Migraine constants ──
 MIGRAINE_ACTIVE_COUNTRIES = ['India', 'UAE']
-MIGRAINE_SUBSCRIPTION_PRICE_USD = 3.99
+MIGRAINE_SUBSCRIPTION_PRICE_USD = 4.99
 
 # ── BetterHelp constants (hardcoded from impact.com) ──
 BETTERHELP_ACTIVE_COUNTRIES = ['USA']  # Affiliate program, primarily US
@@ -1401,32 +1401,33 @@ def merge_glp1_into_cumulative_users(cumulative_users, glp1_signups):
 def get_betterhelp_hardcoded_data():
     """
     Returns hardcoded BetterHelp data from impact.com dashboard.
-    Updated data: 51 purchases, $10,200 revenue
+    Updated data: 51 purchases, $16,600 revenue
     PowerPlug activations: 41,994
     """
     print("\n--- Loading BetterHelp hardcoded data (impact.com) ---")
 
-    # $10,200 total revenue, 51 purchases
+    # $16,600 total revenue, 51 purchases
     # Distributed across Feb-Mar based on impact.com chart shape
-    # Feb 19-28: ~$2,000 (early ramp)
-    # Mar 1-13: ~$8,200 (strong growth)
+    # Feb 19-28: ~$3,200 (early ramp)
+    # Mar 1-16: ~$13,400 (strong growth)
     betterhelp_daily = {
         '2026-02': {
             'dates': [
                 '2026-02-19', '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
                 '2026-02-24', '2026-02-25', '2026-02-26', '2026-02-27', '2026-02-28',
             ],
-            'revenue': [50, 100, 400, 350, 300, 200, 150, 150, 150, 150],  # $2,000 total
+            'revenue': [80, 160, 650, 560, 480, 320, 240, 240, 240, 230],  # $3,200 total
             'actions': [0, 1, 2, 2, 1, 1, 1, 1, 1, 1],                     # 11 purchases
         },
         '2026-03': {
             'dates': [
                 '2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05',
                 '2026-03-06', '2026-03-07', '2026-03-08', '2026-03-09', '2026-03-10',
-                '2026-03-11', '2026-03-12', '2026-03-13',
+                '2026-03-11', '2026-03-12', '2026-03-13', '2026-03-14', '2026-03-15',
+                '2026-03-16',
             ],
-            'revenue': [400, 500, 600, 700, 750, 650, 550, 650, 750, 650, 550, 650, 800],  # $8,200 total
-            'actions': [2, 3, 3, 4, 4, 3, 3, 3, 4, 3, 3, 3, 2],                             # 40 purchases
+            'revenue': [600, 700, 800, 900, 1000, 850, 700, 850, 950, 850, 700, 850, 1000, 850, 700, 1100],  # $13,400 total
+            'actions': [2, 2, 3, 3, 3, 2, 2, 3, 3, 3, 2, 3, 3, 2, 2, 2],                                       # 40 purchases
         },
     }
 
