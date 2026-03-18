@@ -574,14 +574,13 @@ fetch('/auth/user').then(r=>r.ok?r.json():null).then(u=>{
         </table>
       </div>
 
-      <!-- 6. Migraine — PROPOSED -->
+      <!-- 6. Migraine -->
       <div style="margin-bottom:28px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
           <h4 style="color:#f97316;font-size:14px;margin:0">Migraine</h4>
-          <span style="font-size:11px;color:#f97316;background:rgba(249,115,22,0.1);padding:2px 8px;border-radius:4px">Proposed</span>
           <span style="font-size:11px;color:#666">3-day FT (monthly) · 7-day FT (yearly)</span>
         </div>
-        <div style="font-size:11px;color:#555;margin-bottom:10px">India &amp; UAE only · Proposed pricing</div>
+        <div style="font-size:11px;color:#555;margin-bottom:10px">India &amp; UAE live · US, EU, UK TBD with Click</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
           <thead>
             <tr style="border-bottom:1px solid #2a2a3e">
@@ -589,20 +588,26 @@ fetch('/auth/user').then(r=>r.ok?r.json():null).then(u=>{
               <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">USD</th>
               <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">INR</th>
               <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">AED</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">GBP</th>
+              <th style="text-align:center;padding:8px 12px;color:#888;font-weight:600">EUR</th>
             </tr>
           </thead>
           <tbody>
             <tr style="border-bottom:1px solid #1a1a2e">
               <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Monthly</td>
-              <td style="text-align:center;padding:8px 12px;color:#fff">$4.99</td>
-              <td style="text-align:center;padding:8px 12px;color:#fff">&#8377;449</td>
-              <td style="text-align:center;padding:8px 12px;color:#fff">17.99 dh</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">$5.99</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">&#8377;499</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">21.99 dh</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">&pound;4.99</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">&euro;5.99</td>
             </tr>
             <tr>
               <td style="padding:8px 12px;color:#e0e0e0;font-weight:500">Yearly</td>
               <td style="text-align:center;padding:8px 12px;color:#fff">$49.99</td>
-              <td style="text-align:center;padding:8px 12px;color:#fff">&#8377;3,999</td>
-              <td style="text-align:center;padding:8px 12px;color:#fff">179.99 dh</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">&#8377;4,499</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">199.99 dh</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">&pound;44.99</td>
+              <td style="text-align:center;padding:8px 12px;color:#fff">&euro;49.99</td>
             </tr>
           </tbody>
         </table>
@@ -2732,8 +2737,8 @@ function getDefaultCountryData() {
   const teslaCountries = ['USA','UAE','France','UK + IR','Canada','Thailand','Italy','Czech Republic','India','Australia','Spain','Austria','Philippines','Mexico','Saudi Arabia','Singapore','Poland','Germany','New Zealand','Switzerland'];
   // GLP-1: India, UAE, US only
   const glp1Countries = ['India','UAE','USA'];
-  // Migraine: India & UAE (proposed $3.99/mo subscription)
-  const migraineCountries = ['India','UAE'];
+  // Migraine: India & UAE live, US/EU/UK TBD with Click
+  const migraineCountries = ['India','UAE','USA','UK + IR','Germany','Czech Republic','Spain','Netherlands','Switzerland','France','Poland','Austria','Italy','Belgium'];
   // BetterHelp: affiliate via impact.com — active in 30 countries (validated from card 20820)
   const betterHelpCountries = ['USA','Canada','Australia','India','UK + IR','UAE','Germany','Mexico','Spain','Singapore','Czech Republic','New Zealand','France','Saudi Arabia','Austria','Belgium','Philippines','Thailand','Switzerland','Netherlands','Poland','Italy','Taiwan'];
   COUNTRIES.forEach(country => {
