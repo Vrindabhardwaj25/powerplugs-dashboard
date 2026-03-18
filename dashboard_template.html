@@ -1318,14 +1318,19 @@ function renderAlerts() {
       if (topShare > 50 && plugs.length > 2)
         alerts.push({ type: 'info', priority: 5, text: `<span class="val">${displayName(topPP)}</span> drives <span class="neutral">${topShare.toFixed(0)}%</span> of revenue ($${Math.round(ppRevs[topPP]).toLocaleString()}/${Math.round(totalRev).toLocaleString()}) — high concentration risk` });
 
-      // ── 5. PER-PP: BIGGEST MOVERS vs LAST MONTH (at same point) ──
-      if (prevRevData) {
+      // ── 5. PER-PP: BIGGEST MOVERS vs LAST MONTH — only established PPs (skip newly launched) ──
+      // PPs with <4 months of data are considered newly launched
+      const establishedPPs = plugs.filter(p => {
+        const monthsWithData = Object.keys(REVENUE_DATA).filter(m => sum(REVENUE_DATA[m]?.revenue?.[p]||[]) > 0).length;
+        return monthsWithData >= 4;
+      });
+      if (prevRevData && establishedPPs.length > 0) {
         const ppChanges = [];
-        plugs.forEach(p => {
+        establishedPPs.forEach(p => {
           const curRev = sum(revData.revenue[p]||[]);
           const prevSlice = (prevRevData.revenue[p]||[]).slice(0, days);
           const prevRev = prevSlice.reduce((a,b)=>a+b, 0);
-          if (prevRev > 200) { // Only meaningful PPs
+          if (prevRev > 200) {
             const chg = ((curRev - prevRev) / prevRev * 100);
             ppChanges.push({ pp: p, curRev, prevRev, chg });
           }
@@ -1339,18 +1344,6 @@ function renderAlerts() {
             alerts.push({ type: 'down', priority: 3, text: `<span class="val">${displayName(worst.pp)}</span> down <span class="down">${worst.chg.toFixed(0)}%</span> vs same point last month ($${Math.round(worst.curRev).toLocaleString()} vs $${Math.round(worst.prevRev).toLocaleString()})` });
         }
       }
-
-      // ── 6. ALL-TIME HIGH — celebrate wins ──
-      const allMonths = Object.keys(REVENUE_DATA).sort();
-      plugs.forEach(p => {
-        const currentMtd = sum(revData.revenue[p]||[]);
-        const best = allMonths.filter(m => m !== mk).reduce((max, m) => {
-          const mdata = REVENUE_DATA[m];
-          return mdata ? Math.max(max, sum(mdata.revenue[p]||[])) : max;
-        }, 0);
-        if (currentMtd > best && best > 0 && days >= 15)
-          alerts.push({ type: 'up', priority: 4, text: `<span class="val">${displayName(p)}</span> at <span class="up">all-time high</span> ($${Math.round(currentMtd).toLocaleString()}) with ${daysInMonth - days} days left` });
-      });
 
       // ── 7. USER GROWTH ──
       if (CUMULATIVE_USERS && Object.keys(CUMULATIVE_USERS).length >= 2) {
@@ -2741,8 +2734,8 @@ function getDefaultCountryData() {
   const glp1Countries = ['India','UAE','USA'];
   // Migraine: India & UAE (proposed $3.99/mo subscription)
   const migraineCountries = ['India','UAE'];
-  // BetterHelp: US (affiliate via impact.com)
-  const betterHelpCountries = ['USA'];
+  // BetterHelp: affiliate via impact.com — active in 30 countries (validated from card 20820)
+  const betterHelpCountries = ['USA','Canada','Australia','India','UK + IR','UAE','Germany','Mexico','Spain','Singapore','Czech Republic','New Zealand','France','Saudi Arabia','Austria','Belgium','Philippines','Thailand','Switzerland','Netherlands','Poland','Italy','Taiwan'];
   COUNTRIES.forEach(country => {
     data[country] = {};
     data[country]['AFib'] = afibCountries.includes(country);

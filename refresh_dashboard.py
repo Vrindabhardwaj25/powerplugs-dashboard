@@ -1197,7 +1197,7 @@ MIGRAINE_ACTIVE_COUNTRIES = ['India', 'UAE']
 MIGRAINE_SUBSCRIPTION_PRICE_USD = 4.99
 
 # ── BetterHelp constants (hardcoded from impact.com) ──
-BETTERHELP_ACTIVE_COUNTRIES = ['USA']  # Affiliate program, primarily US
+BETTERHELP_ACTIVE_COUNTRIES = ['USA', 'Canada', 'Australia', 'India', 'UK', 'UAE', 'Germany', 'Mexico', 'Spain', 'Singapore', 'Czech Republic', 'New Zealand', 'France', 'Saudi Arabia', 'Austria', 'Belgium', 'Philippines', 'Thailand', 'Switzerland', 'Netherlands', 'Poland', 'Italy', 'Taiwan']
 
 def fetch_glp1_data():
     """
