@@ -2807,6 +2807,44 @@ function deleteCampaign(cat, id) {
 // ============================================================
 // ACTIVE COUNTRIES TAB
 // ============================================================
+// Country adoption data from Snowflake (geo_data_nr_mp + all_purchase)
+// Maps dashboard country name → { totalUsers, plugUsers: { AFib, Cardio, 'CnO Pro', Respiratory, Tesla } }
+const COUNTRY_ADOPTION = {
+  'USA':           { totalUsers: 293429, plugUsers: { AFib: 0, Cardio: 147, 'CnO Pro': 26, Respiratory: 0, Tesla: 0 } },
+  'India':         { totalUsers: 83826,  plugUsers: { AFib: 0, Cardio: 186, 'CnO Pro': 2,  Respiratory: 0, Tesla: 0 } },
+  'UK + IR':       { totalUsers: 38973,  plugUsers: { AFib: 0, Cardio: 26,  'CnO Pro': 18, Respiratory: 0, Tesla: 0 } },
+  'Canada':        { totalUsers: 36170,  plugUsers: { AFib: 0, Cardio: 101, 'CnO Pro': 28, Respiratory: 0, Tesla: 0 } },
+  'Australia':     { totalUsers: 23254,  plugUsers: { AFib: 1, Cardio: 39,  'CnO Pro': 41, Respiratory: 0, Tesla: 0 } },
+  'UAE':           { totalUsers: 17287,  plugUsers: { AFib: 0, Cardio: 26,  'CnO Pro': 4,  Respiratory: 0, Tesla: 0 } },
+  'Germany':       { totalUsers: 16102,  plugUsers: { AFib: 0, Cardio: 6,   'CnO Pro': 21, Respiratory: 0, Tesla: 0 } },
+  'Czech Republic':{ totalUsers: 15121,  plugUsers: { AFib: 0, Cardio: 15,  'CnO Pro': 0,  Respiratory: 0, Tesla: 0 } },
+  'Thailand':      { totalUsers: 12194,  plugUsers: { AFib: 0, Cardio: 30,  'CnO Pro': 1,  Respiratory: 0, Tesla: 0 } },
+  'Switzerland':   { totalUsers: 9747,   plugUsers: { AFib: 0, Cardio: 9,   'CnO Pro': 6,  Respiratory: 0, Tesla: 0 } },
+  'Spain':         { totalUsers: 8229,   plugUsers: { AFib: 0, Cardio: 6,   'CnO Pro': 2,  Respiratory: 0, Tesla: 0 } },
+  'Netherlands':   { totalUsers: 7551,   plugUsers: { AFib: 0, Cardio: 9,   'CnO Pro': 4,  Respiratory: 0, Tesla: 0 } },
+  'Singapore':     { totalUsers: 6828,   plugUsers: { AFib: 0, Cardio: 10,  'CnO Pro': 2,  Respiratory: 0, Tesla: 0 } },
+  'Philippines':   { totalUsers: 6655,   plugUsers: { AFib: 0, Cardio: 6,   'CnO Pro': 2,  Respiratory: 0, Tesla: 0 } },
+  'France':        { totalUsers: 6500,   plugUsers: { AFib: 0, Cardio: 7,   'CnO Pro': 3,  Respiratory: 0, Tesla: 0 } },
+  'Mexico':        { totalUsers: 3797,   plugUsers: { AFib: 0, Cardio: 6,   'CnO Pro': 1,  Respiratory: 0, Tesla: 0 } },
+  'Poland':        { totalUsers: 4944,   plugUsers: { AFib: 0, Cardio: 7,   'CnO Pro': 2,  Respiratory: 0, Tesla: 0 } },
+  'Saudi Arabia':  { totalUsers: 4234,   plugUsers: { AFib: 0, Cardio: 1,   'CnO Pro': 1,  Respiratory: 0, Tesla: 0 } },
+  'Austria':       { totalUsers: 3299,   plugUsers: { AFib: 0, Cardio: 4,   'CnO Pro': 4,  Respiratory: 0, Tesla: 0 } },
+  'Italy':         { totalUsers: 5072,   plugUsers: { AFib: 0, Cardio: 8,   'CnO Pro': 2,  Respiratory: 0, Tesla: 0 } },
+  'Belgium':       { totalUsers: 3016,   plugUsers: { AFib: 0, Cardio: 2,   'CnO Pro': 3,  Respiratory: 0, Tesla: 0 } },
+  'New Zealand':   { totalUsers: 4139,   plugUsers: { AFib: 0, Cardio: 7,   'CnO Pro': 4,  Respiratory: 0, Tesla: 0 } },
+  'Taiwan':        { totalUsers: 1564,   plugUsers: { AFib: 0, Cardio: 4,   'CnO Pro': 0,  Respiratory: 0, Tesla: 0 } },
+  'Bosnia and Herzegovina': { totalUsers: 50, plugUsers: { AFib: 0, Cardio: 0, 'CnO Pro': 0, Respiratory: 0, Tesla: 0 } },
+  'Moldova':       { totalUsers: 40,     plugUsers: { AFib: 0, Cardio: 0,   'CnO Pro': 0,  Respiratory: 0, Tesla: 0 } },
+  'Albania':       { totalUsers: 131,    plugUsers: { AFib: 0, Cardio: 0,   'CnO Pro': 0,  Respiratory: 0, Tesla: 0 } },
+};
+
+function getAttachRate(country, plug) {
+  const cd = COUNTRY_ADOPTION[country];
+  if (!cd || !cd.totalUsers) return null;
+  const pu = cd.plugUsers?.[plug] || 0;
+  return { plugUsers: pu, totalUsers: cd.totalUsers, rate: cd.totalUsers > 0 ? (pu / cd.totalUsers * 100) : 0 };
+}
+
 const COUNTRY_STORAGE_KEY = 'powerplugs-active-countries';
 
 function getDefaultCountryData() {
@@ -2926,6 +2964,9 @@ function renderCountryGrid() {
 
   let html = '<div class="country-table-wrapper"><table class="country-table"><thead><tr><th>Country</th>';
   COUNTRY_PLUGS.forEach(p => html += `<th>${displayName(p)}</th>`);
+  html += '<th style="font-size:10px;color:#22c55e">Total Users</th>';
+  html += '<th style="font-size:10px;color:#22c55e">Plug Users</th>';
+  html += '<th style="font-size:10px;color:#22c55e">Attach Rate</th>';
   if (countryGridSort === 'revenue') html += '<th style="font-size:10px;color:#666">Revenue</th>';
   html += '</tr></thead><tbody>';
   sortedCountries.forEach(country => {
@@ -2935,6 +2976,20 @@ function renderCountryGrid() {
       const active = data[country]?.[p];
       html += `<td class="check-cell ${active?'active':'inactive'}" onclick="toggleCountry('${escHtml(country)}','${p}')">${active?'\u2705':'\u2796'}</td>`;
     });
+    // Adoption stats: sum plug users only for ACTIVE plugs in this country
+    const cd = COUNTRY_ADOPTION[country];
+    const totalUsers = cd?.totalUsers || 0;
+    let activePlugUsers = 0;
+    COUNTRY_PLUGS.forEach(p => {
+      if (data[country]?.[p]) {
+        activePlugUsers += (cd?.plugUsers?.[p] || 0);
+      }
+    });
+    const attachRate = totalUsers > 0 ? (activePlugUsers / totalUsers * 100) : 0;
+    const rateColor = attachRate >= 0.5 ? '#22c55e' : attachRate >= 0.1 ? '#eab308' : '#888';
+    html += `<td style="font-size:11px;color:#888;text-align:center">${totalUsers > 0 ? totalUsers.toLocaleString() : '—'}</td>`;
+    html += `<td style="font-size:11px;color:#3b82f6;text-align:center">${activePlugUsers > 0 ? activePlugUsers.toLocaleString() : '—'}</td>`;
+    html += `<td style="font-size:11px;color:${rateColor};text-align:center;font-weight:600">${totalUsers > 0 ? attachRate.toFixed(2) + '%' : '—'}</td>`;
     if (countryGridSort === 'revenue') html += `<td style="font-size:11px;color:#888">$${Math.round(rev).toLocaleString()}</td>`;
     html += '</tr>';
   });
